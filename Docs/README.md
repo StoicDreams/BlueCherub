@@ -1,6 +1,6 @@
 # Blue Cherub
 
-[WebUI Version: 0.6.49](https://github.com/StoicDreams/RustWebUI)
+[WebUI Version: 0.6.52](https://github.com/StoicDreams/RustWebUI)
 
 Online dating website.
 
