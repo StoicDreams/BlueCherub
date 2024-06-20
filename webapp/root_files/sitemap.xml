@@ -1,23 +1,19 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <urlset xmlns="https://www.sitemaps.org/schemas/sitemap/0.9">
 	<url>
-		<loc>https://www.bluecherub.com/</loc>
-		<lastmod>2024-06-11</lastmod>
+		<loc>https://www.bluecherub.com"/"</loc>
+		<lastmod>2024-06-20</lastmod>
 	</url>
 	<url>
-		<loc>https://www.bluecherub.com/home</loc>
-		<lastmod>2024-06-11</lastmod>
+		<loc>https://www.bluecherub.com"/about"</loc>
+		<lastmod>2024-06-20</lastmod>
 	</url>
 	<url>
-		<loc>https://www.bluecherub.com/about</loc>
-		<lastmod>2024-06-11</lastmod>
+		<loc>https://www.bluecherub.com"/privacy"</loc>
+		<lastmod>2024-06-20</lastmod>
 	</url>
 	<url>
-		<loc>https://www.bluecherub.com/terms</loc>
-		<lastmod>2024-06-11</lastmod>
-	</url>
-	<url>
-		<loc>https://www.bluecherub.com/privacy</loc>
-		<lastmod>2024-06-11</lastmod>
+		<loc>https://www.bluecherub.com"/terms"</loc>
+		<lastmod>2024-06-20</lastmod>
 	</url>
 </urlset>
