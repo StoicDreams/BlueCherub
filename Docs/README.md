@@ -1,5 +1,7 @@
 # Blue Cherub
 
+[Version: 0.1.1](https://github.com/StoicDreams/BlueCherub)
+
 [WebUI Version: 0.10.11](https://github.com/StoicDreams/WebUI)
 
 Online dating website.
