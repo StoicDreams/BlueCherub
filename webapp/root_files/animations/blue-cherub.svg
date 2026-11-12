@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" aria-label="Blue Cherub">
+  <!-- Blue Cherub, concept art (2026-11-10) until Erik draws the final character. Each named group is a rig part. -->
+  <g stroke="#111" stroke-width="8" stroke-linejoin="round" stroke-linecap="round">
+    <g id="wing-back">
+      <path d="M262,178 C306,118 380,112 392,146 C398,168 382,182 374,184 C384,200 366,216 354,212 C360,230 336,242 322,234 C310,248 280,242 272,226 Z" fill="#fff"/>
+      <path d="M314,178 C332,170 354,168 370,176" fill="none" stroke-width="5"/>
+    </g>
+    <g id="legs" fill="#2f7fe8">
+      <ellipse cx="176" cy="334" rx="24" ry="17"/>
+      <ellipse cx="246" cy="336" rx="24" ry="17"/>
+    </g>
+    <g id="body">
+      <ellipse cx="211" cy="274" rx="72" ry="62" fill="#2f7fe8"/>
+      <path id="diaper" d="M144,292 Q211,326 278,292 L272,314 Q211,350 150,314 Z" fill="#fff"/>
+    </g>
+    <g id="head">
+      <circle cx="206" cy="150" r="86" fill="#2f7fe8"/>
+      <path id="hair-curl" d="M200,66 C186,40 218,26 228,46 C234,60 216,68 212,56" fill="none"/>
+      <g id="cheeks" stroke="none" fill="#ff8fb0" opacity=".9">
+        <circle cx="156" cy="186" r="13"/>
+        <circle cx="256" cy="186" r="13"/>
+      </g>
+      <g id="eyes">
+        <ellipse cx="176" cy="148" rx="17" ry="23" fill="#fff"/>
+        <ellipse cx="234" cy="148" rx="17" ry="23" fill="#fff"/>
+        <circle cx="172" cy="154" r="7" fill="#111" stroke="none"/>
+        <circle cx="230" cy="154" r="7" fill="#111" stroke="none"/>
+      </g>
+      <path id="mouth" d="M188,196 Q206,210 224,196" fill="none"/>
+    </g>
+    <g id="bow">
+      <path id="bow-limb" d="M96,206 Q56,280 98,354" fill="none" stroke="#8a4b2a" stroke-width="10"/>
+      <path id="string" d="M96,206 L240,280 L98,354" fill="none" stroke-width="3"/>
+    </g>
+    <g id="arrow">
+      <path id="shaft" d="M60,280 L244,280" fill="none" stroke-width="5"/>
+      <path id="fletching" d="M244,280 L260,268 M244,280 L260,292" fill="none" stroke-width="5"/>
+      <path id="arrow-heart" d="M0,20 C-22,4 -26,-10 -16,-17 C-8,-22 -2,-17 0,-11 C2,-17 8,-22 16,-17 C26,-10 22,4 0,20 Z" fill="#e8233a" stroke-width="5" transform="translate(42 280) rotate(90)"/>
+    </g>
+    <g id="arms" fill="#2f7fe8">
+      <ellipse id="arm-bow" cx="120" cy="281" rx="34" ry="17"/>
+      <ellipse id="arm-string" cx="240" cy="282" rx="16" ry="21"/>
+    </g>
+  </g>
+</svg>

@@ -28,6 +28,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Install Trunk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk, wasm-pack
+      # The animation player calls webui.worker, which loads webapp/pkg. It is not committed, so build it before the UI tests.
+      - name: Build Worker
+        run: |
+          cd webapp
+          wasm-pack build --target web --out-dir pkg
       - name: Install UI Test Tools
         run: |
           npm ci
@@ -36,10 +45,6 @@ jobs:
       # The pages load the minified files and the live CDN, the same as the deployed site.
       - name: Run UI Tests
         run: npm test
-      - name: Install Trunk
-        uses: taiki-e/install-action@v2
-        with:
-          tool: trunk, wasm-pack
       - name: Install Post Build
         run: cargo install webapp_post_build --git https://github.com/StoicDreams/WebUI
       - name: Build Web App

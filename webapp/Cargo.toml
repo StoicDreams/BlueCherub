@@ -1,6 +1,6 @@
 [package]
 name = "webapp"
-version = "0.1.16"
+version = "0.1.17"
 edition = "2024"
 
 [lib]
@@ -8,3 +8,5 @@ crate-type = ["cdylib"] # Critical for wasm libraries
 
 [dependencies]
 webui = { git = "https://github.com/StoicDreams/WebUI", branch = "main", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

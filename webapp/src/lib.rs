@@ -1,8 +1,20 @@
 use crate::prelude::*;
 
 mod prelude;
+mod scene;
 
 /* Define web-worker processes here */
+
+/// Evaluate a Blue Cherub scene into a frame table of part transforms.
+/// The request is JSON with `rig`, `scene`, and `domParents`. See `scene.rs`.
+/// example
+/// ```javascript,ignore
+/// let table = JSON.parse(await webui.worker.evaluate_scene(JSON.stringify(request)));
+/// ```
+#[wasm_bindgen]
+pub fn evaluate_scene(request: String) -> Result<String, String> {
+    scene::evaluate_json(&request)
+}
 
 /// Get UUID generated from JavaScript.
 /// example
