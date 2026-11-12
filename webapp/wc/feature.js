@@ -2,7 +2,8 @@
  * Blue Cherub feature: a screenshot beside a short description, for showing what the studio does.
  * The screenshot links to its full-size image. Put the heading and text inside the element.
  *   <app-feature src="/img/screenshots/studio/rig-layers.png" alt="..." reverse><h3>...</h3><p>...</p></app-feature>
- * Add `video` (an MP4 clip of the feature in use) to show the clip instead, with `src` as its still poster.
+ * Add `video` (an MP4 clip of the feature in use) to show the clip instead, with `src` as its still poster. A WebM
+ * (AV1) file of the same name is offered too, for browsers built without H.264.
  * The clip plays only while on screen, never on its own for visitors who prefer reduced motion, and has a pause button.
  * Side by side when there's room, stacked (picture first) when the component is narrower than 720 pixels (a container query).
  * Copyright © 2026 Stoic Dreams - https://www.stoicdreams.com
@@ -64,7 +65,12 @@
                 case 'video':
                     t._link.hidden = !!value;
                     t._clip.hidden = !value;
-                    if (value) t._video.src = value; else t._video.removeAttribute('src');
+                    // The browser plays the first source it can: the MP4 (H.264), or else the WebM (AV1) beside it.
+                    t._video.replaceChildren(...(value ? [
+                        Object.assign(document.createElement('source'), { src: value, type: 'video/mp4; codecs="avc1.640028"' }),
+                        Object.assign(document.createElement('source'), { src: value.replace(/\.mp4$/i, '.webm'), type: 'video/webm; codecs="av01.0.05M.08"' }),
+                    ] : []));
+                    t._video.load();
                     t._updateClip();
                     break;
                 case 'visible':

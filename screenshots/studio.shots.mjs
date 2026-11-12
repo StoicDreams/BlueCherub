@@ -99,7 +99,8 @@ test('screenshots of the studio at each stage', async ({ page }) => {
 // ----- Clips -----
 // Short MP4 clips of the studio in use, for features that are actions. Each clip is captured stop-motion: the script
 // takes one step, screenshots a fixed area, and repeats, so the clip is sharp and the same on every run. ffmpeg
-// encodes the frames (H.264, yuv420p, faststart). The PNG of the same name is the clip's poster.
+// encodes the frames twice: H.264 MP4 (for Safari and most browsers) and AV1 WebM (for browsers built without H.264,
+// such as some Linux Chromium builds and the one on GitHub's runners). The PNG of the same name is the clip's poster.
 // Needs ffmpeg on the PATH. Without it, the clips are skipped and the PNG stills are used.
 const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
 
@@ -124,11 +125,19 @@ async function recorder(page, locator, name, fps = 12) {
             for (let i = 0; i < frames; i++) write(last);
         },
         finish() {
-            const out = join(STUDIO_SHOTS, `${name}.mp4`);
-            const result = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(fps), '-i', join(dir, '%04d.png'),
-                '-c:v', 'libx264', '-preset', 'slow', '-crf', '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out], { encoding: 'utf8' });
-            rmSync(dir, { recursive: true, force: true });
-            if (result.status !== 0) throw new Error(`ffmpeg failed for ${name}: ${result.stderr}`);
+            const input = ['-y', '-loglevel', 'error', '-framerate', String(fps), '-i', join(dir, '%04d.png'), '-pix_fmt', 'yuv420p'];
+            const encodings = [
+                ['mp4', ['-c:v', 'libx264', '-preset', 'slow', '-crf', '24', '-movflags', '+faststart']],
+                ['webm', ['-c:v', 'libsvtav1', '-preset', '6', '-crf', '40']],
+            ];
+            try {
+                for (const [extension, codec] of encodings) {
+                    const result = spawnSync('ffmpeg', [...input, ...codec, join(STUDIO_SHOTS, `${name}.${extension}`)], { encoding: 'utf8' });
+                    if (result.status !== 0) throw new Error(`ffmpeg failed for ${name}.${extension}: ${result.stderr}`);
+                }
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
         },
     };
 }

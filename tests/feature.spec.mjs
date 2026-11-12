@@ -26,6 +26,7 @@ test.describe('app-feature', () => {
                 await expect(clip).toHaveAttribute('poster', src);
                 await expect(clip).toHaveAttribute('aria-label', /\w/);
                 await expect.poll(() => clip.evaluate(el => el.readyState)).toBeGreaterThan(0);
+                await expect(clip.locator('source')).toHaveCount(2);
                 await expect(feature.getByRole('link')).toHaveCount(0);
             } else {
                 const img = feature.locator('img');
@@ -51,6 +52,17 @@ test.describe('app-feature', () => {
         await expect.poll(() => clip.evaluate(el => !el.paused)).toBe(true);
     });
 
+    test('falls back to the WebM clip when the MP4 cannot play', async ({ page }) => {
+        // Stand in for a browser without H.264 by making every MP4 fail.
+        await page.route('**/*.mp4', route => route.abort());
+        await openPage(page, '/');
+        const feature = page.locator('app-feature[video]').first();
+        await feature.scrollIntoViewIfNeeded();
+        const clip = feature.locator('video');
+        await expect.poll(() => clip.evaluate(el => el.currentSrc)).toMatch(/\.webm$/);
+        await expect.poll(() => clip.evaluate(el => el.readyState)).toBeGreaterThan(0);
+    });
+
     test('never starts clips for visitors who prefer reduced motion', async ({ page }) => {
         await page.emulateMedia({ reducedMotion: 'reduce' });
         await openPage(page, '/');
@@ -74,7 +86,9 @@ test.describe('app-feature', () => {
     test('every screenshot and clip the home page and guide use exists', () => {
         const refs = [...screenshotRefs(join(WEBAPP, 'd', 'root.md')), ...screenshotRefs(GUIDE)];
         expect(refs.filter(ref => ref.endsWith('.mp4')).length).toBeGreaterThan(4);
-        const missing = refs.filter(ref => !existsSync(join(ROOT_FILES, ref)));
+        // Each MP4 clip has a WebM (AV1) twin for browsers without H.264.
+        const files = [...refs, ...refs.filter(ref => ref.endsWith('.mp4')).map(ref => ref.replace(/\.mp4$/, '.webm'))];
+        const missing = files.filter(ref => !existsSync(join(ROOT_FILES, ref)));
         expect(missing, 'Run PowerShell/screenshots.ps1 (clips need ffmpeg), or fix the path').toEqual([]);
     });
 });

@@ -879,14 +879,18 @@
             easeSelect.addEventListener('change', () => t.setEase(part, easeSelect.value));
             t._panel.replaceChildren(
                 el('h3', { text: part }),
-                // These notes keep the same size on every frame, so scrubbing never moves the panel or the timeline.
-                el('p', { class: 'note fixed', text: keys.length ? `◆ ${keys.length} key${keys.length === 1 ? '' : 's'} at frame ${t._frame}.` : `No keys at frame ${t._frame} yet. Changing a value adds one.` }),
+                // The notes that change from frame to frame are short and keep a fixed space, so scrubbing never moves
+                // the panel or the timeline, whatever font the browser uses. The longer explanation never changes.
+                el('p', { class: 'note', text: 'Changing a value keys it at this frame.' }),
+                el('p', { class: 'note fixed', text: keys.length ? `◆ ${keys.length} key${keys.length === 1 ? '' : 's'} at frame ${t._frame}` : `No keys at frame ${t._frame}` }),
                 t._scene.holdFrames === 2
                     ? el('p', {
                         class: 'note fixed',
                         style: t._frame % 2 === 1 ? '' : 'visibility:hidden',
                         'aria-hidden': t._frame % 2 === 1 ? null : 'true',
-                        text: `On twos, frame ${t._frame - (t._frame % 2 === 1 ? 0 : 1) || 1} shows the frame before it. Keys here appear one frame later.`,
+                        title: 'This scene animates on twos, so odd frames show the frame before them, and keys on them appear one frame later.',
+                        // Even frames hold the same text as the next odd frame, hidden, so the space never changes.
+                        text: `On twos: shows frame ${t._frame - (t._frame % 2)}`,
                     })
                     : '',
                 el('div', { class: 'fields' }, fields),
@@ -1156,7 +1160,13 @@ opacity:0.85;
 }
 .note.fixed {
 line-height:1.35;
-min-height:calc(2 * 1.35em);
+height:1.35em;
+}
+/* Labels and notes that change from frame to frame stay on one line, so their height never depends on the font. */
+.note.fixed, .field label {
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
 }
 .main > *, .side > *, .fields > *, .form > * {
 min-width:0;

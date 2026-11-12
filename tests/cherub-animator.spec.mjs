@@ -130,14 +130,18 @@ test.describe('app-cherub-animator', () => {
                 stage: place(root.querySelector('.stage-wrap')),
             };
         });
-        await animator.evaluate(el => el.setFrame(0));
-        const first = await layout();
         const moved = [];
-        for (let frame = 1; frame < 48; frame++) {
-            await animator.evaluate((el, f) => el.setFrame(f), frame);
-            const now = await layout();
-            for (const [name, place] of Object.entries(now)) {
-                if (place !== first[name]) moved.push(`${name} at frame ${frame}: ${first[name]} → ${place}`);
+        // Run with this browser's font, then with wider letters, standing in for a wider fallback font on other systems.
+        for (const spacing of ['normal', '0.15em']) {
+            await animator.evaluate((el, value) => { el.style.letterSpacing = value; }, spacing);
+            await animator.evaluate(el => el.setFrame(0));
+            const first = await layout();
+            for (let frame = 1; frame < 48; frame++) {
+                await animator.evaluate((el, f) => el.setFrame(f), frame);
+                const now = await layout();
+                for (const [name, place] of Object.entries(now)) {
+                    if (place !== first[name]) moved.push(`${spacing} spacing, ${name} at frame ${frame}: ${first[name]} → ${place}`);
+                }
             }
         }
         expect(moved).toEqual([]);
@@ -261,7 +265,7 @@ test.describe('app-cherub-animator swaps and library', () => {
         await expect(animator.locator('.status')).toContainText('Saved the action “Flap” (12 frames)');
         // On twos, an odd frame shows the frame before it, and the panel says so.
         await animator.getByLabel('Frame', { exact: true }).fill('7');
-        await expect(animator.getByText('On twos, frame 7 shows the frame before it')).toBeVisible();
+        await expect(animator.getByText('On twos: shows frame 6')).toBeVisible();
         const flap = (await scene(animator)).library.actions.Flap;
         expect(flap.tracks.map(tr => tr.part)).toEqual(['wing-back']);
         expect(flap.tracks[0].keys.map(k => [k.frame, k.value])).toEqual([[0, 0], [6, -18], [12, 0]]);

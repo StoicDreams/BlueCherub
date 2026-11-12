@@ -104,6 +104,10 @@ test.describe('app-cherub-export', () => {
     test('exports an H.264 MP4 that plays', async ({ page }) => {
         test.setTimeout(90000);
         const exporter = await openExport(page);
+        // Some browser builds can't encode H.264. There the export explains why, which another test covers.
+        const canEncode = await page.evaluate(async () => typeof VideoEncoder === 'function'
+            && (await VideoEncoder.isConfigSupported({ codec: 'avc1.640028', width: 360, height: 360, bitrate: 1e6, framerate: 24 })).supported);
+        test.skip(!canEncode, 'This browser build cannot encode H.264 video');
         await exporter.getByLabel('Size').selectOption('360');
         const { name, bytes } = await downloadBytes(page, () => exporter.getByRole('button', { name: 'Export' }).click());
         expect(name).toBe('blue-cherub.mp4');
@@ -124,9 +128,10 @@ test.describe('app-cherub-export', () => {
                 const file = join(dir, name);
                 writeFileSync(file, bytes);
                 const result = spawnSync('ffprobe', ['-v', 'error', '-count_frames', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,width,height,nb_read_frames,avg_frame_rate', '-of', 'json', file], { encoding: 'utf8' });
-                expect(result.stderr).toBe('');
+                // Versions of ffprobe differ in the warnings they print, so check what it read, not what it said.
+                expect(result.status, result.stderr).toBe(0);
                 const stream = JSON.parse(result.stdout).streams[0];
-                expect(stream).toEqual({ codec_name: 'h264', width: 360, height: 360, avg_frame_rate: '24/1', nb_read_frames: '48' });
+                expect([stream.codec_name, stream.width, stream.height, stream.avg_frame_rate, String(stream.nb_read_frames)]).toEqual(['h264', 360, 360, '24/1', '48']);
             } finally {
                 rmSync(dir, { recursive: true, force: true });
             }
