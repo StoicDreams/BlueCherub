@@ -1,14 +1,12 @@
 # Blue Cherub
 
-[Version: 0.1.19](https://github.com/StoicDreams/BlueCherub)
+[Version: 0.1.20](https://github.com/StoicDreams/BlueCherub)
 
 [WebUI](https://github.com/StoicDreams/WebUI)
 
-Online dating website.
+A free animation studio that runs in the browser. Rig any SVG drawing, then pose and animate it on a timeline. Live at [bluecherub.com](https://www.bluecherub.com), with a [guide](https://www.bluecherub.com/guide).
 
-## Ideas
-
-* Date matching
+Blue Cherub, a little blue cupid, is its mascot.
 
 ## Development
 
@@ -21,7 +19,7 @@ Before running this project, follow the [Web CLI Setup](https://webui.stoicdream
 To run the project locally, you can use the following command:
 
 ```terminal:Run the project from the root directory
-./PowerShell/RunLocal.ps1 -port 3210
+./PowerShell/RunLocal.ps1
 ```
 
 ## Author

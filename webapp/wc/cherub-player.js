@@ -104,6 +104,16 @@
         return chain.reduce((matrix, node) => matrix.multiply(ownMatrix(node)), new DOMMatrix());
     }
 
+    /** A part's swap drawings, with their own display setting to restore when shown. */
+    function swapOptions(rigPart, svg) {
+        const ids = rigPart && Array.isArray(rigPart.swaps) ? rigPart.swaps : [];
+        if (!ids.length) return null;
+        return ids.map(id => {
+            const el = svg.querySelector(`[id="${CSS.escape(id)}"]`);
+            return el ? { el, display: el.getAttribute('display') } : null;
+        });
+    }
+
     function matrixText(m) {
         return `matrix(${[m.a, m.b, m.c, m.d, m.e, m.f].map(v => +v.toFixed(4)).join(' ')})`;
     }
@@ -217,9 +227,10 @@
             if (frame === t._frame) return;
             t._frame = frame;
             const values = table.values;
-            const stride = table.parts.length * 7;
+            const per = table.valuesPerPart || 7;
+            const stride = table.parts.length * per;
             for (const part of t._parts) {
-                const at = frame * stride + part.index * 7;
+                const at = frame * stride + part.index * per;
                 let animated = new DOMMatrix(values.slice(at, at + 6));
                 // Inside transformed groups, move the root-space animation into the parent's own coordinates.
                 if (part.toParent) animated = part.toParent.multiply(animated).multiply(part.fromParent);
@@ -233,6 +244,21 @@
                 if (opacity !== part.lastOpacity) {
                     part.lastOpacity = opacity;
                     part.el.setAttribute('opacity', opacity);
+                }
+                // Show only the chosen swap drawing.
+                if (part.swaps) {
+                    const index = values[at + 7];
+                    if (index !== part.lastSwap) {
+                        part.lastSwap = index;
+                        part.swaps.forEach((option, i) => {
+                            if (!option) return;
+                            if (i === index) {
+                                if (option.display === null) option.el.removeAttribute('display'); else option.el.setAttribute('display', option.display);
+                            } else {
+                                option.el.setAttribute('display', 'none');
+                            }
+                        });
+                    }
                 }
             }
             t.dispatchEvent(new CustomEvent('framechange', { detail: { frame } }));
@@ -356,6 +382,7 @@
                             ...part,
                             original: part.el.getAttribute('transform') || '',
                             opacity: parseFloat(part.el.getAttribute('opacity') || '1'),
+                            swaps: swapOptions(rig.parts[part.id], svg),
                             fromParent: nested ? fromParent : null,
                             toParent: nested ? fromParent.inverse() : null,
                         };

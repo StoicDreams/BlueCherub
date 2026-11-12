@@ -149,6 +149,12 @@
             const pivot = Array.isArray(part && part.pivot) && part.pivot.length === 2 && part.pivot.every(Number.isFinite) ? part.pivot : [0, 0];
             parts[id] = { pivot: [...pivot] };
             if (part && typeof part.parent === 'string') parts[id].parent = part.parent;
+            if (part && Array.isArray(part.swaps)) {
+                const swaps = [...new Set(part.swaps.filter(s => typeof s === 'string'))];
+                const found = swaps.filter(s => byId(svg, s));
+                if (found.length < swaps.length) problems.push(`${id} lost swap drawings that aren't in the SVG`);
+                if (found.length) parts[id].swaps = found.slice(0, 50);
+            }
         }
         for (const [id, part] of Object.entries(parts)) {
             if (part.parent && !parts[part.parent]) {
@@ -228,6 +234,8 @@
             t._svgInput = q('input[name="svg-file"]');
             t._openInput = q('input[name="rig-files"]');
             t._buttons = {};
+            t._swapStyle = document.createElement('style');
+            t.template.append(t._swapStyle);
             q('.toolbar').querySelectorAll('button[data-action]').forEach(button => {
                 t._buttons[button.dataset.action] = button;
                 button.addEventListener('click', () => t._run(button.dataset.action));
@@ -585,6 +593,9 @@
                 delete t._rig.parts[oldId];
                 Object.values(t._rig.parts).forEach(p => { if (p.parent === oldId) p.parent = newId; });
             }
+            Object.values(t._rig.parts).forEach(p => {
+                if (p.swaps) p.swaps = p.swaps.map(s => s === oldId ? newId : s);
+            });
             t._selection = t._selection.map(id => id === oldId ? newId : id);
             t._update();
             t._say(`Renamed ${oldId} to ${newId}.`);
@@ -698,6 +709,7 @@
         },
         _update() {
             const t = this;
+            t._pruneSwaps();
             const has = !!t._svg;
             const els = has ? t._selectedElements() : [];
             t._buttons.undo.disabled = !t._undo.length;
@@ -709,6 +721,7 @@
             t._buttons.download.disabled = !has;
             if (typeof t._layers.setTree === 'function') t._layers.setTree(t._svg, { parts: Object.keys(t._rig.parts), selection: t._selection });
             t._renderProps(els);
+            t._renderSwapVisibility();
             t._renderOverlay(els);
         },
         _renderProps(els) {
@@ -776,12 +789,79 @@
                 el('button', { type: 'button', text: 'Suggest pivot', on: { click: () => { const [x, y] = t._suggestPivot(id); t.setPivot(id, x, y); } } }),
                 el('label', { for: 'part-parent', text: 'Attached to' }),
                 parentSelect,
+                ...t._swapControls(id, target),
                 el('div', { class: 'row' }, [
                     el('button', { type: 'button', class: 'primary', text: 'Test', on: { click: () => t.testPart(id) } }),
                     el('button', { type: 'button', text: 'Not a part', on: { click: () => t.removePart(id) } }),
                 ]),
             );
             return nodes;
+        },
+        _swapControls(id, target) {
+            const t = this;
+            const swaps = t._rig.parts[id].swaps || [];
+            const children = [...target.children].filter(c => GRAPHIC.has(c.localName));
+            if (!swaps.length) {
+                return [el('fieldset', {}, [
+                    el('legend', { text: 'Swap drawings' }),
+                    el('p', { class: 'note span', text: 'Alternate drawings that take turns, such as eyes open and closed. Put each one in its own group inside this part.' }),
+                    el('button', { type: 'button', class: 'span', disabled: children.length < 2, 'data-focus': 'use-swaps', text: 'Use its groups as swaps', on: { click: () => t.setSwaps(id, children.map(c => c.id)) } }),
+                ])];
+            }
+            const rows = swaps.map((swapId, index) => {
+                const option = byId(t._svg, swapId);
+                const name = option ? core().layerName(option) : swapId;
+                return el('div', { class: 'swap span' }, [
+                    el('button', { type: 'button', class: 'link', 'data-focus': `swap-${swapId}`, text: name, 'aria-label': `Show ${name}`, on: { click: () => t._select(swapId) } }),
+                    index === 0
+                        ? el('span', { class: 'note', text: 'At rest' })
+                        : el('button', { type: 'button', 'data-focus': `rest-${swapId}`, text: 'Use at rest', 'aria-label': `Use ${name} at rest`, on: { click: () => t.setSwaps(id, [swapId, ...swaps.filter(s => s !== swapId)]) } }),
+                    el('button', { type: 'button', 'data-focus': `drop-${swapId}`, text: 'Remove', 'aria-label': `Remove ${name} from swaps`, on: { click: () => t.setSwaps(id, swaps.filter(s => s !== swapId)) } }),
+                ]);
+            });
+            return [el('fieldset', {}, [
+                el('legend', { text: `Swap drawings (${swaps.length})` }),
+                ...rows,
+                el('button', { type: 'button', class: 'span', 'data-focus': 'stop-swaps', text: 'Stop swapping', on: { click: () => t.setSwaps(id, []) } }),
+            ])];
+        },
+        /** Set a part's swap drawings. The first shows at rest. Ids must be in the SVG. */
+        setSwaps(id, swapIds) {
+            const t = this;
+            const part = t._rig.parts[id];
+            if (!part) return;
+            const swaps = [...new Set(swapIds)].filter(s => s !== id && byId(t._svg, s)).slice(0, 50);
+            t._checkpoint();
+            if (swaps.length) part.swaps = swaps; else delete part.swaps;
+            t._update();
+            t._say(swaps.length ? `${id} swaps between ${swaps.length} drawings.` : `${id} no longer swaps drawings.`);
+        },
+        /** Hide swap drawings that don't show at rest, unless one is selected, so the stage looks like the character at rest. */
+        _renderSwapVisibility() {
+            const t = this;
+            const selected = new Set(t._selection);
+            const rules = [];
+            for (const part of Object.values(t._rig.parts)) {
+                (part.swaps || []).slice(1).forEach(swapId => {
+                    const option = t._svg && byId(t._svg, swapId);
+                    const showing = option && [...selected].some(s => s === swapId || (byId(t._svg, s) && (option.contains(byId(t._svg, s)))));
+                    if (!showing) rules.push(`.stage [id="${CSS.escape(swapId)}"]{display:none}`);
+                });
+                if (part.swaps && [...selected].some(s => part.swaps.slice(1).includes(s))) {
+                    rules.push(`.stage [id="${CSS.escape(part.swaps[0])}"]{display:none}`);
+                }
+            }
+            t._swapStyle.textContent = rules.join('\n');
+        },
+        /** Drop swap drawings that an edit removed from the SVG. */
+        _pruneSwaps() {
+            const t = this;
+            if (!t._svg) return;
+            for (const part of Object.values(t._rig.parts)) {
+                if (!part.swaps) continue;
+                part.swaps = part.swaps.filter(s => byId(t._svg, s));
+                if (!part.swaps.length) delete part.swaps;
+            }
         },
         _renderOverlay(els) {
             const t = this;
@@ -1019,6 +1099,35 @@ margin:0;
 .row {
 display:flex;
 gap:0.5rem;
+}
+.span {
+grid-column:1 / -1;
+}
+fieldset p {
+margin:0;
+}
+.swap {
+display:flex;
+flex-wrap:wrap;
+gap:0.3rem 0.4rem;
+align-items:center;
+padding-bottom:0.35rem;
+border-bottom:1px solid var(--rig-border);
+}
+.swap .note {
+padding:0.35rem 0;
+}
+button.link {
+flex:1 1 100%;
+min-width:0;
+padding-inline:0;
+overflow:hidden;
+text-overflow:ellipsis;
+text-align:start;
+border:none;
+background:transparent;
+color:inherit;
+text-decoration:underline;
 }
 .note {
 font-size:0.9em;

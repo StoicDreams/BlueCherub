@@ -212,3 +212,38 @@ test.describe('app-cherub-layers', () => {
         await expect(layers.getByRole('button', { name: /Right arm/ })).toHaveAttribute('aria-pressed', 'true');
     });
 });
+
+test.describe('app-cherub-rigger swaps', () => {
+    const faceSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <g id="face"><g id="happy"><circle cx="50" cy="50" r="20"/></g><g id="sad"><rect x="30" y="30" width="40" height="40"/></g><g id="shock"><ellipse cx="50" cy="50" rx="10" ry="25"/></g></g>
+</svg>`;
+
+    test('sets up swap drawings, shows only the one at rest, and saves them in the rig', async ({ page }) => {
+        const rigger = await openStudio(page);
+        await importSvg(rigger, faceSvg, 'face.svg');
+        await rigger.locator('app-cherub-layers').getByRole('button', { name: /^face\s*Group/ }).click();
+        await rigger.getByRole('button', { name: 'Make this a part' }).click();
+        await rigger.getByRole('button', { name: 'Use its groups as swaps' }).click();
+        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['happy', 'sad', 'shock']);
+        const displays = () => rigger.evaluate(el => ['happy', 'sad', 'shock'].map(id => getComputedStyle(el.shadowRoot.querySelector(`.stage #${id}`)).display));
+        expect(await displays()).toEqual(['inline', 'none', 'none']);
+        await rigger.getByRole('button', { name: 'Use shock at rest' }).click();
+        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'happy', 'sad']);
+        await rigger.getByRole('button', { name: 'Remove sad from swaps' }).click();
+        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'happy']);
+        // Selecting a drawing shows it, so it can be checked and edited.
+        await rigger.getByRole('button', { name: 'Show happy' }).click();
+        expect(await displays()).toEqual(['inline', 'inline', 'none']);
+        // Swaps stay in the SVG output untouched: hiding is only on the stage.
+        expect(await rigger.evaluate(el => el.svgText)).not.toContain('display');
+        // Renaming a drawing keeps the swap list in step.
+        await rigger.getByLabel('Name').fill('grin');
+        await rigger.getByLabel('Name').press('Enter');
+        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'grin']);
+        await rigger.locator('app-cherub-layers').getByRole('button', { name: /^face\s*Group/ }).click();
+        await rigger.getByRole('button', { name: 'Stop swapping' }).click();
+        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toBeUndefined();
+        await rigger.getByRole('button', { name: 'Undo' }).click();
+        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'grin']);
+    });
+});

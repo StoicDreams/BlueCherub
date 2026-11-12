@@ -114,3 +114,20 @@ test.describe('app-cherub-player in moved groups', () => {
         expect(point).toEqual([100, 10]);
     });
 });
+
+test.describe('app-cherub-player swaps', () => {
+    test('shows only the chosen swap drawing, so Blue Cherub blinks', async ({ page }) => {
+        await openPage(page, '/');
+        const player = page.locator('app-cherub-player');
+        await expect(player).toHaveAttribute('loaded', '');
+        const shown = frame => player.evaluate((el, frame) => {
+            el.pause();
+            el.showFrame(frame);
+            const svg = el.svgElement;
+            return ['eyes-open', 'eyes-closed'].map(id => svg.querySelector(`#${id}`).getAttribute('display') !== 'none');
+        }, frame);
+        expect(await shown(0)).toEqual([true, false]);
+        expect(await shown(38)).toEqual([false, true]);
+        expect(await shown(40)).toEqual([true, false]);
+    });
+});

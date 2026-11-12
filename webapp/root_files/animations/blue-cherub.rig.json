@@ -2,15 +2,78 @@
     "formatVersion": 1,
     "svg": "blue-cherub.svg",
     "parts": {
-        "body": { "pivot": [211, 336] },
-        "legs": { "pivot": [211, 334], "parent": "body" },
-        "head": { "pivot": [206, 228], "parent": "body" },
-        "hair-curl": { "pivot": [206, 68], "parent": "head" },
-        "eyes": { "pivot": [205, 150], "parent": "head" },
-        "wing-back": { "pivot": [268, 205], "parent": "body" },
-        "arm-bow": { "pivot": [150, 281], "parent": "body" },
-        "bow": { "pivot": [96, 280], "parent": "arm-bow" },
-        "arm-string": { "pivot": [228, 282], "parent": "body" },
-        "arrow": { "pivot": [244, 280], "parent": "body" }
+        "body": {
+            "pivot": [
+                211,
+                336
+            ]
+        },
+        "legs": {
+            "pivot": [
+                211,
+                334
+            ],
+            "parent": "body"
+        },
+        "head": {
+            "pivot": [
+                206,
+                228
+            ],
+            "parent": "body"
+        },
+        "hair-curl": {
+            "pivot": [
+                206,
+                68
+            ],
+            "parent": "head"
+        },
+        "eyes": {
+            "pivot": [
+                205,
+                150
+            ],
+            "parent": "head",
+            "swaps": [
+                "eyes-open",
+                "eyes-closed"
+            ]
+        },
+        "wing-back": {
+            "pivot": [
+                268,
+                205
+            ],
+            "parent": "body"
+        },
+        "arm-bow": {
+            "pivot": [
+                150,
+                281
+            ],
+            "parent": "body"
+        },
+        "bow": {
+            "pivot": [
+                96,
+                280
+            ],
+            "parent": "arm-bow"
+        },
+        "arm-string": {
+            "pivot": [
+                228,
+                282
+            ],
+            "parent": "body"
+        },
+        "arrow": {
+            "pivot": [
+                244,
+                280
+            ],
+            "parent": "body"
+        }
     }
 }

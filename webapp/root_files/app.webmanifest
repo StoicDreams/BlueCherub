@@ -1,10 +1,11 @@
 {
   "name": "Blue Cherub",
   "short_name": "Blue Cherub",
+  "description": "Blue Cherub is a free animation studio in your browser. Rig any SVG drawing, then pose and animate it on a timeline. No paywall.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#FF2E46",
+  "background_color": "#333333",
+  "theme_color": "#067ac7",
   "prefer_related_applications": false,
   "icons": [
     {

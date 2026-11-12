@@ -181,3 +181,82 @@ test.describe('app-cherub-animator', () => {
         expect((await scene(animator)).frameCount).toBe(30);
     });
 });
+
+test.describe('app-cherub-animator swaps and library', () => {
+    test('keys a swap drawing, which always holds until the next key', async ({ page }) => {
+        const animator = await openSample(page);
+        await animator.getByLabel('Frame', { exact: true }).fill('6');
+        await animator.locator('.parts').getByRole('button', { name: 'eyes' }).click();
+        await expect(animator.getByLabel('Drawing')).toHaveValue('0');
+        await animator.getByLabel('Drawing').selectOption({ label: 'eyes-closed' });
+        await expect(animator.getByLabel('Drawing ◆')).toHaveValue('1');
+        const keys = track(await scene(animator), 'eyes', 'swap').keys;
+        expect(keys.find(k => k.frame === 6)).toEqual({ frame: 6, value: 1, ease: 'step' });
+        const closedShows = await animator.evaluate(el => el.shadowRoot.querySelector('app-cherub-player').svgElement.querySelector('#eyes-closed').getAttribute('display') !== 'none');
+        expect(closedShows).toBe(true);
+    });
+
+    test('saves a pose and applies it at another frame', async ({ page }) => {
+        const animator = await openSample(page);
+        await animator.locator('.parts').getByRole('button', { name: 'head' }).click();
+        await animator.getByLabel('Rotate (°)').fill('15');
+        await animator.getByLabel('Rotate (°)').press('Enter');
+        await animator.getByText('Library: saved poses and actions').click();
+        await animator.getByLabel('Pose name').fill('Tilted');
+        await animator.getByLabel('Save', { exact: true }).first().selectOption('part');
+        await animator.getByRole('button', { name: 'Save pose' }).click();
+        await expect(animator.locator('.status')).toContainText('Saved the pose “Tilted”');
+        const saved = (await scene(animator)).library.poses.Tilted;
+        // The head and the parts attached to it.
+        expect(Object.keys(saved).sort()).toEqual(['eyes', 'hair-curl', 'head']);
+        expect(saved.head.rotate).toBe(15);
+        await animator.getByLabel('Frame', { exact: true }).fill('30');
+        await animator.getByRole('button', { name: 'Apply Tilted' }).click();
+        await expect.poll(() => animator.evaluate(el => el.poses.head.rotate)).toBe(15);
+        expect(track(await scene(animator), 'head', 'rotate').keys.some(k => k.frame === 30 && k.value === 15)).toBe(true);
+        await animator.getByRole('button', { name: 'Delete Tilted' }).click();
+        expect((await scene(animator)).library.poses).toEqual({});
+    });
+
+    test('saves an action and inserts it repeatedly, lengthening the scene', async ({ page }) => {
+        const animator = await openSample(page);
+        await animator.locator('.parts').getByRole('button', { name: 'wing-back' }).click();
+        await animator.getByText('Library: saved poses and actions').click();
+        await animator.getByLabel('Action name').fill('Flap');
+        await animator.getByLabel('From frame').fill('0');
+        await animator.getByLabel('To frame').fill('12');
+        await animator.getByLabel('Save', { exact: true }).last().selectOption('part');
+        await animator.getByRole('button', { name: 'Save action' }).click();
+        await expect(animator.locator('.status')).toContainText('Saved the action “Flap” (12 frames)');
+        // On twos, an odd frame shows the frame before it, and the panel says so.
+        await animator.getByLabel('Frame', { exact: true }).fill('7');
+        await expect(animator.getByText('animates on twos, so frame 7 shows frame 6')).toBeVisible();
+        const flap = (await scene(animator)).library.actions.Flap;
+        expect(flap.tracks.map(tr => tr.part)).toEqual(['wing-back']);
+        expect(flap.tracks[0].keys.map(k => [k.frame, k.value])).toEqual([[0, 0], [6, -18], [12, 0]]);
+
+        await animator.getByLabel('Frame', { exact: true }).fill('40');
+        await animator.getByLabel('Insert it this many times').fill('3');
+        await animator.getByRole('button', { name: 'Insert Flap' }).click();
+        await expect(animator.locator('.status')).toContainText('Inserted “Flap” 3 times at frame 40. The scene is now 77 frames long.');
+        const frames = track(await scene(animator), 'wing-back', 'rotate').keys.map(k => k.frame);
+        expect(frames).toEqual(expect.arrayContaining([40, 46, 52, 58, 64, 70, 76]));
+        await animator.getByRole('button', { name: 'Undo' }).click();
+        await expect.poll(async () => (await scene(animator)).frameCount).toBe(48);
+    });
+
+    test('keeps the library in the downloaded scene', async ({ page }) => {
+        const animator = await openSample(page);
+        await animator.getByText('Library: saved poses and actions').click();
+        await animator.getByLabel('Pose name').fill('Rest');
+        await animator.getByRole('button', { name: 'Save pose' }).click();
+        const downloadPromise = page.waitForEvent('download');
+        await animator.getByRole('button', { name: 'Download scene' }).click();
+        const chunks = [];
+        for await (const chunk of await (await downloadPromise).createReadStream()) chunks.push(chunk);
+        const saved = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        expect(Object.keys(saved.library.poses)).toEqual(['Rest']);
+        expect(Object.keys(saved.library.poses.Rest)).toHaveLength(10);
+        expect(saved.library.poses.Rest.eyes.swap).toBe(0);
+    });
+});

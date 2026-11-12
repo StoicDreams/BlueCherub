@@ -8,5 +8,10 @@
         "name": "Studio",
         "icon": "circle_paintbrush|theme:title|backing|inverted",
         "url": "/studio"
+    },
+    {
+        "name": "Guide",
+        "icon": "circle_book-open|theme:title|backing|inverted",
+        "url": "/guide"
     }
 ]

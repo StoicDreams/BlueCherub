@@ -17,8 +17,11 @@ const MAX_PARTS: usize = 500;
 const MAX_KEYS: usize = 20_000;
 /// Numbers in one evaluated frame table, so a scene can't use up the browser's memory.
 const MAX_OUTPUT_VALUES: usize = 8_000_000;
-/// Values written for each part in each frame: the six numbers of an SVG matrix, then opacity.
-pub const VALUES_PER_PART: usize = 7;
+/// Values written for each part in each frame: the six numbers of an SVG matrix, opacity,
+/// then the index of the swap drawing to show (-1 for a part without swaps).
+pub const VALUES_PER_PART: usize = 8;
+/// Most alternate drawings one part can have.
+const MAX_SWAPS: usize = 50;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +36,10 @@ pub struct RigPart {
     pub pivot: [f64; 2],
     #[serde(default)]
     pub parent: Option<String>,
+    /// Alternate drawings (SVG element ids). One shows at a time, chosen by the part's `swap` track.
+    /// The first one shows when there are no keys.
+    #[serde(default)]
+    pub swaps: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -68,6 +75,8 @@ pub enum Property {
     ScaleX,
     ScaleY,
     Opacity,
+    /// Which swap drawing shows, by index. Always holds until the next key.
+    Swap,
 }
 
 #[derive(Deserialize, Clone)]
@@ -122,7 +131,9 @@ pub struct FrameTable {
     pub frame_count: u32,
     /// Part ids, in the order their values appear in each frame.
     pub parts: Vec<String>,
-    /// `frame_count * parts.len() * 7` values: for each frame, for each part, `a b c d e f opacity`.
+    /// How many values each part has in each frame (8).
+    pub values_per_part: usize,
+    /// `frame_count * parts.len() * 8` values: for each frame, for each part, `a b c d e f opacity swap`.
     pub values: Vec<f64>,
 }
 
@@ -189,11 +200,12 @@ struct Pose {
     scale_x: f64,
     scale_y: f64,
     opacity: f64,
+    swap: f64,
 }
 
 impl Default for Pose {
     fn default() -> Self {
-        Pose { x: 0.0, y: 0.0, rotate: 0.0, scale_x: 1.0, scale_y: 1.0, opacity: 1.0 }
+        Pose { x: 0.0, y: 0.0, rotate: 0.0, scale_x: 1.0, scale_y: 1.0, opacity: 1.0, swap: 0.0 }
     }
 }
 
@@ -206,6 +218,7 @@ impl Pose {
             Property::ScaleX => self.scale_x = value,
             Property::ScaleY => self.scale_y = value,
             Property::Opacity => self.opacity = value.clamp(0.0, 1.0),
+            Property::Swap => self.swap = value,
         }
     }
 
@@ -230,6 +243,20 @@ fn value_at(keys: &[Key], frame: u32) -> f64 {
     };
     let t = (frame - from.frame) as f64 / (to.frame - from.frame) as f64;
     from.value + (to.value - from.value) * from.ease.apply(t)
+}
+
+/// The value of the last key at or before a frame (or the first key), ignoring easing. Used for swaps.
+fn held_value_at(keys: &[Key], frame: u32) -> f64 {
+    let next = keys.partition_point(|key| key.frame <= frame);
+    keys[next.saturating_sub(1)].value
+}
+
+/// The drawing index a swap value picks, or -1 for a part without swaps.
+fn swap_index(value: f64, swaps: usize) -> f64 {
+    if swaps == 0 {
+        return -1.0;
+    }
+    value.round().clamp(0.0, (swaps - 1) as f64)
 }
 
 fn check_finite(value: f64, what: &str) -> Result<(), String> {
@@ -270,6 +297,13 @@ fn validate(request: &mut EvaluateRequest) -> Result<(), String> {
                 return Err(format!("{id} has an unknown parent {parent}"));
             }
         }
+        if part.swaps.len() > MAX_SWAPS {
+            return Err(format!("{id} has more than {MAX_SWAPS} swap drawings"));
+        }
+        let mut unique = HashSet::new();
+        if part.swaps.iter().any(|swap| swap.is_empty() || !unique.insert(swap)) {
+            return Err(format!("{id} has an empty or repeated swap drawing"));
+        }
     }
     for (id, parent) in &request.dom_parents {
         if !rig.parts.contains_key(id) || !rig.parts.contains_key(parent) {
@@ -279,8 +313,11 @@ fn validate(request: &mut EvaluateRequest) -> Result<(), String> {
     let mut total_keys = 0;
     let mut seen = HashSet::new();
     for track in &mut scene.tracks {
-        if !rig.parts.contains_key(&track.part) {
+        let Some(part) = rig.parts.get(&track.part) else {
             return Err(format!("A track uses an unknown part {}", track.part));
+        };
+        if track.property == Property::Swap && part.swaps.is_empty() {
+            return Err(format!("{} has a swap track but no swap drawings", track.part));
         }
         if !seen.insert((track.part.clone(), track.property)) {
             return Err(format!("{} has more than one {:?} track", track.part, track.property));
@@ -348,6 +385,7 @@ struct Prepared<'a> {
     pivots: Vec<[f64; 2]>,
     parents: Vec<Option<usize>>,
     dom_parents: Vec<Option<usize>>,
+    swap_counts: Vec<usize>,
     tracks: Vec<(usize, &'a Track)>,
 }
 
@@ -361,8 +399,9 @@ impl<'a> Prepared<'a> {
         let pivots = ids.iter().map(|id| rig.parts[id].pivot).collect();
         let parents = ids.iter().map(|id| rig.parts[id].parent.as_ref().map(|p| index[p.as_str()])).collect();
         let dom_parents = ids.iter().map(|id| request.dom_parents.get(id).map(|p| index[p.as_str()])).collect();
+        let swap_counts = ids.iter().map(|id| rig.parts[id].swaps.len()).collect();
         let tracks = request.scene.tracks.iter().map(|t| (index[t.part.as_str()], t)).collect();
-        Ok(Prepared { scene: &request.scene, ids, order, pivots, parents, dom_parents, tracks })
+        Ok(Prepared { scene: &request.scene, ids, order, pivots, parents, dom_parents, swap_counts, tracks })
     }
 
     /// Each part's pose and world transform (root coordinates) at a frame.
@@ -370,7 +409,11 @@ impl<'a> Prepared<'a> {
         let held = frame - frame % self.scene.hold_frames;
         poses.iter_mut().for_each(|pose| *pose = Pose::default());
         for (part, track) in &self.tracks {
-            poses[*part].set(track.property, value_at(&track.keys, held));
+            let value = match track.property {
+                Property::Swap => held_value_at(&track.keys, held),
+                _ => value_at(&track.keys, held),
+            };
+            poses[*part].set(track.property, value);
         }
         for &i in &self.order {
             let local = poses[i].matrix(self.pivots[i]);
@@ -399,10 +442,11 @@ pub fn evaluate(mut request: EvaluateRequest) -> Result<FrameTable, String> {
                 Some(p) => world[p].inverse().unwrap_or(Matrix::IDENTITY).then(world[i]),
                 None => world[i],
             };
-            values.extend_from_slice(&[m.a, m.b, m.c, m.d, m.e, m.f, poses[i].opacity]);
+            let swap = swap_index(poses[i].swap, prepared.swap_counts[i]);
+            values.extend_from_slice(&[m.a, m.b, m.c, m.d, m.e, m.f, poses[i].opacity, swap]);
         }
     }
-    Ok(FrameTable { fps: scene.fps, frame_count: scene.frame_count, parts: prepared.ids, values })
+    Ok(FrameTable { fps: scene.fps, frame_count: scene.frame_count, parts: prepared.ids, values_per_part: VALUES_PER_PART, values })
 }
 
 /// One part's values at a frame, for the editor.
@@ -415,6 +459,8 @@ pub struct PartPose {
     pub scale_x: f64,
     pub scale_y: f64,
     pub opacity: f64,
+    /// The swap drawing that shows, by index, or none for a part without swaps.
+    pub swap: Option<usize>,
     /// The part's transform in root coordinates, as `a b c d e f`.
     pub world: [f64; 6],
     /// The parent's transform in root coordinates (identity with no parent), for turning drags into moves.
@@ -447,6 +493,10 @@ pub fn pose_at(mut request: EvaluateRequest, frame: u32) -> Result<HashMap<Strin
                 scale_x: p.scale_x,
                 scale_y: p.scale_y,
                 opacity: p.opacity,
+                swap: match prepared.swap_counts[i] {
+                    0 => None,
+                    n => Some(swap_index(p.swap, n) as usize),
+                },
                 world: flat(world[i]),
                 parent_world: flat(parent),
             })
@@ -628,6 +678,49 @@ mod tests {
         // The arm's parent is the body, moved 4 to the right.
         assert!(close(poses["arm"].parent_world[4], 4.0));
         assert!(close(poses["body"].parent_world[4], 0.0));
+    }
+
+    const SWAP_RIG: &str = r#""rig":{"formatVersion":1,"parts":{"eyes":{"pivot":[0,0],"swaps":["open","closed","shocked"]},"body":{}}}"#;
+
+    #[test]
+    fn swaps_hold_until_the_next_key_and_stay_in_range() {
+        let r = request(&format!(
+            r#"{{{SWAP_RIG},"scene":{{"formatVersion":1,"fps":24,"frameCount":10,"tracks":[
+                {{"part":"eyes","property":"swap","keys":[{{"frame":2,"value":1,"ease":"linear"}},{{"frame":6,"value":9}}]}}]}}}}"#
+        ));
+        let table = evaluate(r).unwrap();
+        assert_eq!(table.values_per_part, 8);
+        // Before the first key the first key's drawing shows, and easing never blends drawings.
+        assert!(close(part_values(&table, 0, "eyes")[7], 1.0));
+        assert!(close(part_values(&table, 5, "eyes")[7], 1.0));
+        // 9 is past the last drawing, so the last one shows.
+        assert!(close(part_values(&table, 6, "eyes")[7], 2.0));
+        // Parts without swaps report -1.
+        assert!(close(part_values(&table, 0, "body")[7], -1.0));
+    }
+
+    #[test]
+    fn pose_at_reports_the_swap() {
+        let r = request(&format!(
+            r#"{{{SWAP_RIG},"scene":{{"formatVersion":1,"fps":24,"frameCount":4,"tracks":[
+                {{"part":"eyes","property":"swap","keys":[{{"frame":1,"value":2}}]}}]}}}}"#
+        ));
+        let poses = pose_at(r, 3).unwrap();
+        assert_eq!(poses["eyes"].swap, Some(2));
+        assert_eq!(poses["body"].swap, None);
+    }
+
+    #[test]
+    fn swap_tracks_need_swap_drawings_and_swaps_must_be_unique() {
+        let no_swaps = request(&format!(
+            r#"{{{SWAP_RIG},"scene":{{"formatVersion":1,"fps":24,"frameCount":1,"tracks":[
+                {{"part":"body","property":"swap","keys":[{{"frame":0,"value":1}}]}}]}}}}"#
+        ));
+        assert!(evaluate(no_swaps).unwrap_err().contains("no swap drawings"));
+        let repeated = request(
+            r#"{"rig":{"formatVersion":1,"parts":{"eyes":{"swaps":["a","a"]}}},"scene":{"formatVersion":1,"fps":24,"frameCount":1}}"#,
+        );
+        assert!(evaluate(repeated).unwrap_err().contains("repeated swap"));
     }
 
     #[test]

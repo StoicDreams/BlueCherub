@@ -3,6 +3,10 @@
 <webui-restrict-to-role role="1">
     <template slot="valid">
         <app-cherub-studio></app-cherub-studio>
+        <webui-page-help heading="Studio guide" storage-key="bluecherub-studio-help">
+            <p>The same guide is on the <a href="/guide">Guide</a> page.</p>
+            <webui-content src="/guide/studio-guide.md" nodetach></webui-content>
+        </webui-page-help>
     </template>
     <template slot="invalid">
         <webui-quote theme="info">

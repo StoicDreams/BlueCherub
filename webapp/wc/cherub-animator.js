@@ -61,10 +61,77 @@
     }
 
     function newScene(name) {
-        return { formatVersion: 1, rig: `${name}.rig.json`, fps: 24, frameCount: 48, holdFrames: 1, tracks: [] };
+        return { formatVersion: 1, rig: `${name}.rig.json`, fps: 24, frameCount: 48, holdFrames: 1, tracks: [], library: { poses: {}, actions: {} } };
     }
 
     /** Check an opened scene and keep the tracks for parts this rig has. */
+    const hasSwaps = (rig, part) => !!(rig.parts[part] && Array.isArray(rig.parts[part].swaps) && rig.parts[part].swaps.length);
+
+    /** The properties a part can key: the six values, plus `swap` when it has swap drawings. */
+    function keyable(rig, part) {
+        const names = PROPERTIES.map(p => p.name);
+        return hasSwaps(rig, part) ? [...names, 'swap'] : names;
+    }
+
+    function cleanKeys(keys, property) {
+        return (Array.isArray(keys) ? keys : [])
+            .filter(k => k && Number.isInteger(k.frame) && k.frame >= 0 && k.frame <= MAX_FRAMES * 20 && Number.isFinite(k.value))
+            .map(k => ({
+                frame: k.frame,
+                value: property === 'swap' ? Math.max(0, Math.round(k.value)) : k.value,
+                // Swaps always hold until the next key.
+                ease: property === 'swap' ? 'step' : EASES.some(e => e.value === k.ease) ? k.ease : 'inOut',
+            }))
+            .sort((a, b) => a.frame - b.frame)
+            .filter((k, i, all) => i === 0 || all[i - 1].frame !== k.frame);
+    }
+
+    function cleanTracks(tracks, rig, dropped) {
+        const seen = new Set();
+        const out = [];
+        for (const track of Array.isArray(tracks) ? tracks : []) {
+            if (!track || !rig.parts[track.part]) {
+                if (track && track.part && dropped) dropped.add(track.part);
+                continue;
+            }
+            if (!keyable(rig, track.part).includes(track.property) || seen.has(`${track.part}|${track.property}`)) continue;
+            const keys = cleanKeys(track.keys, track.property);
+            if (!keys.length) continue;
+            seen.add(`${track.part}|${track.property}`);
+            out.push({ part: track.part, property: track.property, keys });
+        }
+        return out;
+    }
+
+    const NAME_LIMIT = 40;
+    const cleanName = name => typeof name === 'string' ? name.trim().slice(0, NAME_LIMIT) : '';
+
+    /** Saved poses and actions, kept to the parts this rig has. */
+    function cleanLibrary(data, rig) {
+        const library = { poses: {}, actions: {} };
+        const source = data && typeof data === 'object' ? data : {};
+        for (const [rawName, pose] of Object.entries(source.poses || {}).slice(0, 200)) {
+            const name = cleanName(rawName);
+            if (!name || !pose || typeof pose !== 'object') continue;
+            const parts = {};
+            for (const [part, values] of Object.entries(pose)) {
+                if (!rig.parts[part] || !values || typeof values !== 'object') continue;
+                const kept = {};
+                keyable(rig, part).forEach(prop => { if (Number.isFinite(values[prop])) kept[prop] = values[prop]; });
+                if (Object.keys(kept).length) parts[part] = kept;
+            }
+            if (Object.keys(parts).length) library.poses[name] = parts;
+        }
+        for (const [rawName, action] of Object.entries(source.actions || {}).slice(0, 200)) {
+            const name = cleanName(rawName);
+            const length = action && parseInt(action.length);
+            if (!name || !(length >= 0 && length <= MAX_FRAMES)) continue;
+            const tracks = cleanTracks(action.tracks, rig).map(tr => ({ ...tr, keys: tr.keys.filter(k => k.frame <= length) })).filter(tr => tr.keys.length);
+            if (tracks.length) library.actions[name] = { length, tracks };
+        }
+        return library;
+    }
+
     function cleanScene(data, rig, name) {
         if (!data || typeof data !== 'object' || data.formatVersion !== 1) throw new Error('This is not a version 1 Blue Cherub scene');
         const scene = newScene(name);
@@ -74,22 +141,8 @@
         if (frames >= 1 && frames <= MAX_FRAMES) scene.frameCount = frames;
         scene.holdFrames = parseInt(data.holdFrames) === 2 ? 2 : 1;
         const dropped = new Set();
-        const seen = new Set();
-        for (const track of Array.isArray(data.tracks) ? data.tracks : []) {
-            if (!track || !rig.parts[track.part]) {
-                if (track && track.part) dropped.add(track.part);
-                continue;
-            }
-            if (!PROPERTIES.some(p => p.name === track.property) || seen.has(`${track.part}|${track.property}`)) continue;
-            const keys = (Array.isArray(track.keys) ? track.keys : [])
-                .filter(k => k && Number.isInteger(k.frame) && k.frame >= 0 && Number.isFinite(k.value))
-                .map(k => ({ frame: k.frame, value: k.value, ease: EASES.some(e => e.value === k.ease) ? k.ease : 'inOut' }))
-                .sort((a, b) => a.frame - b.frame)
-                .filter((k, i, all) => i === 0 || all[i - 1].frame !== k.frame);
-            if (!keys.length) continue;
-            seen.add(`${track.part}|${track.property}`);
-            scene.tracks.push({ part: track.part, property: track.property, keys });
-        }
+        scene.tracks = cleanTracks(data.tracks, rig, dropped);
+        scene.library = cleanLibrary(data.library, rig);
         return { scene, dropped: [...dropped] };
     }
 
@@ -130,6 +183,13 @@
             t._length = q('input[name="length"]');
             t._twos = q('input[name="twos"]');
             t._openInput = q('input[name="scene-file"]');
+            t._poseList = q('.pose-list');
+            t._actionList = q('.action-list');
+            t._form = {
+                poseName: q('#pose-name'), poseScope: q('#pose-scope'),
+                actionName: q('#action-name'), actionFrom: q('#action-from'), actionTo: q('#action-to'),
+                actionScope: q('#action-scope'), actionRepeat: q('#action-repeat'),
+            };
             t._buttons = {};
             t.template.querySelectorAll('button[data-action]').forEach(button => {
                 t._buttons[button.dataset.action] = button;
@@ -315,25 +375,27 @@
             }
             return track;
         },
-        _putKey(part, property, value) {
+        _putKey(part, property, value, frame = this._frame, ease = null) {
             const t = this;
             const track = t._track(part, property, true);
-            const existing = track.keys.find(k => k.frame === t._frame);
+            const existing = track.keys.find(k => k.frame === frame);
+            if (property === 'swap') ease = 'step';
             if (existing) {
                 existing.value = value;
+                if (ease) existing.ease = ease;
             } else {
                 // A new key eases like the key before it, so a run of keys keeps one feel.
-                const before = [...track.keys].reverse().find(k => k.frame < t._frame);
-                track.keys.push({ frame: t._frame, value, ease: before ? before.ease : 'inOut' });
+                const before = [...track.keys].reverse().find(k => k.frame < frame);
+                track.keys.push({ frame, value, ease: ease || (before ? before.ease : 'inOut') });
                 track.keys.sort((a, b) => a.frame - b.frame);
             }
         },
         /** Key one value for a part at the current frame. */
         async setValue(part, property, value) {
             const t = this;
-            const spec = PROPERTIES.find(p => p.name === property);
-            if (!spec || !t._rig || !t._rig.parts[part] || !Number.isFinite(value)) return;
-            if (spec.name === 'opacity') value = Math.max(0, Math.min(1, value));
+            if (!t._rig || !t._rig.parts[part] || !keyable(t._rig, part).includes(property) || !Number.isFinite(value)) return;
+            if (property === 'opacity') value = Math.max(0, Math.min(1, value));
+            if (property === 'swap') value = Math.max(0, Math.min(t._rig.parts[part].swaps.length - 1, Math.round(value)));
             t._checkpoint();
             t._putKey(part, property, round(value, 4));
             await t._changed();
@@ -344,7 +406,7 @@
             const pose = t._poses[part];
             if (!pose) return;
             t._checkpoint();
-            PROPERTIES.forEach(p => t._putKey(part, p.name, round(pose[p.name], 4)));
+            keyable(t._rig, part).forEach(prop => t._putKey(part, prop, prop === 'swap' ? pose.swap : round(pose[prop], 4)));
             await t._changed();
             t._say(`Keyed ${part} at frame ${t._frame}.`);
         },
@@ -363,7 +425,7 @@
         async setEase(part, ease) {
             const t = this;
             if (!EASES.some(e => e.value === ease)) return;
-            const keys = t._scene.tracks.filter(tr => tr.part === part).flatMap(tr => tr.keys.filter(k => k.frame === t._frame));
+            const keys = t._scene.tracks.filter(tr => tr.part === part && tr.property !== 'swap').flatMap(tr => tr.keys.filter(k => k.frame === t._frame));
             if (!keys.length) return;
             t._checkpoint();
             keys.forEach(k => { k.ease = ease; });
@@ -414,6 +476,170 @@
             } catch (ex) {
                 if (token === t._poseToken) t._say(`Could not read the pose: ${ex}`);
             }
+        },
+        // ----- Library -----
+        /** A part and every part attached to it, or every part. */
+        _scopeParts(scope) {
+            const t = this;
+            const all = Object.keys(t._rig.parts);
+            if (scope !== 'part' || !t._part) return all;
+            const out = new Set([t._part]);
+            let grew = true;
+            while (grew) {
+                grew = false;
+                for (const id of all) {
+                    const parent = t._rig.parts[id].parent;
+                    if (parent && out.has(parent) && !out.has(id)) {
+                        out.add(id);
+                        grew = true;
+                    }
+                }
+            }
+            return [...out];
+        },
+        async _posesAt(frame) {
+            const t = this;
+            await core().workerReady();
+            return JSON.parse(await webui.worker.pose_at(JSON.stringify({ rig: t._rig, scene: t._scene }), frame));
+        },
+        _poseValues(id, pose) {
+            const t = this;
+            const values = {};
+            keyable(t._rig, id).forEach(prop => { values[prop] = prop === 'swap' ? pose.swap : round(pose[prop], 4); });
+            return values;
+        },
+        /** Save the pose at this frame under a name, for the whole character or the selected part and its attached parts. */
+        savePose(name, scope = 'all') {
+            const t = this;
+            name = cleanName(name);
+            if (!name) return t._say('Give the pose a name.');
+            if (scope === 'part' && !t._part) return t._say('Select a part to save its pose.');
+            const parts = {};
+            t._scopeParts(scope).forEach(id => { if (t._poses[id]) parts[id] = t._poseValues(id, t._poses[id]); });
+            const replaced = !!t._scene.library.poses[name];
+            t._checkpoint();
+            t._scene.library.poses[name] = parts;
+            t._form.poseName.value = '';
+            t._render();
+            t._say(`${replaced ? 'Replaced' : 'Saved'} the pose “${name}” (${Object.keys(parts).length} parts).`);
+        },
+        /** Key a saved pose at the current frame. */
+        async applyPose(name) {
+            const t = this;
+            const pose = t._scene.library.poses[name];
+            if (!pose) return;
+            t._checkpoint();
+            for (const [part, values] of Object.entries(pose)) {
+                if (!t._rig.parts[part]) continue;
+                Object.entries(values).forEach(([prop, value]) => { if (keyable(t._rig, part).includes(prop)) t._putKey(part, prop, value); });
+            }
+            await t._changed();
+            t._say(`Applied the pose “${name}” at frame ${t._frame}.`);
+        },
+        deletePose(name) {
+            const t = this;
+            if (!t._scene.library.poses[name]) return;
+            t._checkpoint();
+            delete t._scene.library.poses[name];
+            t._render();
+            t._say(`Deleted the pose “${name}”.`);
+        },
+        /** Save the motion between two frames as a named action that can be inserted anywhere. */
+        async saveAction(name, from, to, scope = 'all') {
+            const t = this;
+            name = cleanName(name);
+            if (!name) return t._say('Give the action a name.');
+            if (scope === 'part' && !t._part) return t._say('Select a part to save its action.');
+            const last = t._scene.frameCount - 1;
+            if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to > last || from >= to) {
+                return t._say(`Choose frames from 0 to ${last}, with "from" before "to".`);
+            }
+            const parts = new Set(t._scopeParts(scope));
+            let startPoses, endPoses;
+            try {
+                [startPoses, endPoses] = await Promise.all([t._posesAt(from), t._posesAt(to)]);
+            } catch (ex) {
+                return t._say(`Could not read the poses: ${ex}`);
+            }
+            const length = to - from;
+            const tracks = [];
+            for (const track of t._scene.tracks) {
+                if (!parts.has(track.part)) continue;
+                const value = (poses, prop) => prop === 'swap' ? poses[track.part].swap : round(poses[track.part][prop], 4);
+                const governing = [...track.keys].reverse().find(k => k.frame <= from);
+                // The start and end values are keyed too, so the action plays the same wherever its keys fell.
+                const keys = [{ frame: 0, value: value(startPoses, track.property), ease: governing ? governing.ease : 'inOut' }];
+                track.keys.filter(k => k.frame > from && k.frame < to).forEach(k => keys.push({ frame: k.frame - from, value: k.value, ease: k.ease }));
+                keys.push({ frame: length, value: value(endPoses, track.property), ease: 'inOut' });
+                if (track.property === 'swap') keys.forEach(k => { k.ease = 'step'; });
+                tracks.push({ part: track.part, property: track.property, keys });
+            }
+            if (!tracks.length) return t._say('Nothing in that range moves yet, so there is no action to save.');
+            const replaced = !!t._scene.library.actions[name];
+            t._checkpoint();
+            t._scene.library.actions[name] = { length, tracks };
+            t._form.actionName.value = '';
+            t._render();
+            t._say(`${replaced ? 'Replaced' : 'Saved'} the action “${name}” (${length} frames).`);
+        },
+        /** Insert a saved action starting at the current frame, as many times as asked. Lengthens the scene if needed. */
+        async insertAction(name, times = 1) {
+            const t = this;
+            const action = t._scene.library.actions[name];
+            if (!action) return;
+            times = Math.max(1, Math.min(50, parseInt(times) || 1));
+            let end = t._frame;
+            t._checkpoint();
+            for (let r = 0; r < times; r++) {
+                const base = t._frame + r * action.length;
+                for (const track of action.tracks) {
+                    if (!t._rig.parts[track.part] || !keyable(t._rig, track.part).includes(track.property)) continue;
+                    track.keys.forEach(k => {
+                        t._putKey(track.part, track.property, k.value, base + k.frame, k.ease);
+                        end = Math.max(end, base + k.frame);
+                    });
+                }
+            }
+            let grew = '';
+            if (end >= t._scene.frameCount) {
+                t._scene.frameCount = Math.min(MAX_FRAMES, end + 1);
+                grew = ` The scene is now ${t._scene.frameCount} frames long.`;
+            }
+            await t._changed();
+            t._say(`Inserted “${name}”${times > 1 ? ` ${times} times` : ''} at frame ${t._frame}.${grew}`);
+        },
+        deleteAction(name) {
+            const t = this;
+            if (!t._scene.library.actions[name]) return;
+            t._checkpoint();
+            delete t._scene.library.actions[name];
+            t._render();
+            t._say(`Deleted the action “${name}”.`);
+        },
+        _renderLibrary() {
+            const t = this;
+            const { poses, actions } = t._scene.library;
+            const row = (name, detail, useLabel, use, remove) => el('li', {}, [
+                el('span', { class: 'saved-name', text: detail ? `${name} (${detail})` : name }),
+                el('button', { type: 'button', 'data-focus': `use-${useLabel}-${name}`, 'aria-label': `${useLabel} ${name}`, text: useLabel, on: { click: use } }),
+                el('button', { type: 'button', 'data-focus': `delete-${useLabel}-${name}`, 'aria-label': `Delete ${name}`, text: 'Delete', on: { click: remove } }),
+            ]);
+            const poseNames = Object.keys(poses).sort();
+            const actionNames = Object.keys(actions).sort();
+            t._poseList.replaceChildren(...(poseNames.length
+                ? poseNames.map(name => row(name, '', 'Apply', () => t.applyPose(name), () => t.deletePose(name)))
+                : [el('li', { class: 'note', text: 'No saved poses yet.' })]));
+            t._actionList.replaceChildren(...(actionNames.length
+                ? actionNames.map(name => row(name, `${actions[name].length} frames`, 'Insert', () => t.insertAction(name, t._form.actionRepeat.value), () => t.deleteAction(name)))
+                : [el('li', { class: 'note', text: 'No saved actions yet.' })]));
+            [t._form.poseScope, t._form.actionScope].forEach(select => {
+                select.querySelector('option[value="part"]').disabled = !t._part;
+                if (!t._part) select.value = 'all';
+            });
+            t._form.actionTo.max = t._scene.frameCount - 1;
+            const to = parseInt(t._form.actionTo.value);
+            if (!(to >= 1) || to > t._scene.frameCount - 1) t._form.actionTo.value = Math.max(1, t._scene.frameCount - 1);
+            t._form.actionFrom.max = t._scene.frameCount - 2;
         },
         // ----- Playback -----
         play() {
@@ -542,6 +768,8 @@
             if (!t._rig) return;
             switch (action) {
                 case 'download': t.downloadScene(); break;
+                case 'save-pose': t.savePose(t._form.poseName.value, t._form.poseScope.value); break;
+                case 'save-action': t.saveAction(t._form.actionName.value, parseInt(t._form.actionFrom.value), parseInt(t._form.actionTo.value), t._form.actionScope.value); break;
                 case 'play': if (t._player.playing) t.pause(); else t.play(); break;
                 case 'first': t.pause(); t.setFrame(0); break;
                 case 'last': t.pause(); t.setFrame(t._scene.frameCount - 1); break;
@@ -583,6 +811,7 @@
             const focusKey = active && (active.dataset.focus || active.id);
             t._renderParts();
             t._renderPanel();
+            t._renderLibrary();
             t._renderLanes();
             t._renderOverlay();
             if (focusKey && !(t.shadowRoot.activeElement && t.shadowRoot.activeElement.isConnected)) {
@@ -620,13 +849,29 @@
                     input,
                 ]);
             });
-            const eases = new Set(keys.map(k => k.ease));
-            const easeSelect = el('select', { id: 'key-ease', disabled: !keys.length }, EASES.map(e => el('option', { value: e.value, text: e.label, selected: eases.size === 1 && eases.has(e.value) })));
-            if (eases.size !== 1) easeSelect.prepend(el('option', { value: '', text: keys.length ? 'Mixed' : 'No keys here', selected: true }));
+            if (hasSwaps(t._rig, part)) {
+                const svg = t._player.svgElement;
+                const swapSelect = el('select', { id: 'value-swap' }, t._rig.parts[part].swaps.map((swapId, index) => {
+                    const option = svg && svg.querySelector(`[id="${CSS.escape(swapId)}"]`);
+                    const name = (option && option.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label')) || swapId;
+                    return el('option', { value: index, text: name, selected: pose.swap === index });
+                }));
+                swapSelect.addEventListener('change', () => t.setValue(part, 'swap', parseInt(swapSelect.value)));
+                fields.push(el('div', { class: keyed.has('swap') ? 'field keyed wide' : 'field wide' }, [
+                    el('label', { for: 'value-swap', text: keyed.has('swap') ? 'Drawing ◆' : 'Drawing' }),
+                    swapSelect,
+                ]));
+            }
+            const eases = new Set(keys.filter(k => k.property !== 'swap').map(k => k.ease));
+            const easeSelect = el('select', { id: 'key-ease', disabled: !keys.some(k => k.property !== 'swap') }, EASES.map(e => el('option', { value: e.value, text: e.label, selected: eases.size === 1 && eases.has(e.value) })));
+            if (eases.size !== 1) easeSelect.prepend(el('option', { value: '', text: eases.size ? 'Mixed' : 'No keys here', selected: true }));
             easeSelect.addEventListener('change', () => t.setEase(part, easeSelect.value));
             t._panel.replaceChildren(
                 el('h3', { text: part }),
                 el('p', { class: 'note', text: keys.length ? `${keys.length} key${keys.length === 1 ? '' : 's'} at frame ${t._frame} (◆).` : `No keys at frame ${t._frame}. Changing a value adds one.` }),
+                t._scene.holdFrames === 2 && t._frame % 2 === 1
+                    ? el('p', { class: 'note', text: `This scene animates on twos, so frame ${t._frame} shows frame ${t._frame - 1}. Keys here appear on the next frame.` })
+                    : '',
                 el('div', { class: 'fields' }, fields),
                 el('label', { for: 'key-ease', text: 'From these keys to the next' }),
                 easeSelect,
@@ -696,7 +941,27 @@
 <section class="canvas" aria-label="Scene">
 <div class="stage-wrap" tabindex="-1"><app-cherub-player no-controls label="The scene being animated"></app-cherub-player><svg class="overlay" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg></div>
 </section>
+<div class="side">
 <section aria-label="Selected part"><h2>Pose</h2><div class="panel"></div></section>
+<details class="library"><summary>Library: saved poses and actions</summary>
+<h3>Poses</h3>
+<ul class="saved pose-list"></ul>
+<div class="form">
+<label for="pose-name">Pose name</label><input id="pose-name" type="text" maxlength="40" autocomplete="off" spellcheck="false">
+<label for="pose-scope">Save</label><select id="pose-scope"><option value="all">Whole character</option><option value="part">Selected part and attached parts</option></select>
+<button type="button" data-action="save-pose">Save pose</button>
+</div>
+<h3>Actions</h3>
+<ul class="saved action-list"></ul>
+<div class="form">
+<label for="action-name">Action name</label><input id="action-name" type="text" maxlength="40" autocomplete="off" spellcheck="false">
+<div class="pair"><label>From frame <input id="action-from" type="number" min="0" step="1" value="0"></label><label>To frame <input id="action-to" type="number" min="1" step="1" value="47"></label></div>
+<label for="action-scope">Save</label><select id="action-scope"><option value="all">Whole character</option><option value="part">Selected part and attached parts</option></select>
+<button type="button" data-action="save-action">Save action</button>
+<label for="action-repeat">Insert it this many times</label><input id="action-repeat" type="number" min="1" max="50" step="1" value="1">
+</div>
+</details>
+</div>
 </div>
 <section class="timeline" aria-label="Timeline">
 <div class="transport">
@@ -757,7 +1022,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 outline:3px solid var(--color-active, #0b78ce);
 outline-offset:2px;
 }
-input[type="number"], select {
+input[type="number"], input[type="text"], select {
 width:100%;
 box-sizing:border-box;
 padding:0.3rem 0.4rem;
@@ -868,6 +1133,74 @@ gap:0.5rem;
 .note {
 font-size:0.9em;
 opacity:0.85;
+}
+.main > *, .side > *, .fields > *, .form > * {
+min-width:0;
+}
+.side {
+display:grid;
+gap:0.75rem;
+min-width:0;
+}
+.library {
+border:1px solid var(--anim-border);
+border-radius:0.5rem;
+padding:0.5rem;
+}
+.library summary {
+cursor:pointer;
+font-weight:bold;
+}
+.library[open] summary {
+margin-bottom:0.5rem;
+}
+.library summary:focus-visible {
+outline:3px solid var(--color-active, #0b78ce);
+outline-offset:2px;
+}
+.field.wide {
+grid-column:1 / -1;
+}
+.saved {
+list-style:none;
+margin:0 0 0.5rem;
+padding:0;
+display:grid;
+gap:0.3rem;
+}
+.saved li {
+display:flex;
+flex-wrap:wrap;
+gap:0.35rem;
+align-items:center;
+}
+.saved-name {
+flex:1;
+min-width:0;
+overflow:hidden;
+text-overflow:ellipsis;
+white-space:nowrap;
+}
+.saved button {
+padding:0.2rem 0.5rem;
+}
+.form {
+display:grid;
+gap:0.35rem;
+margin-bottom:0.75rem;
+}
+.pair {
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:0.4rem;
+}
+.pair label {
+display:grid;
+gap:0.2rem;
+font-size:0.9em;
+}
+h3 + .saved, h3 {
+margin-top:0.25rem;
 }
 .timeline {
 margin-top:0.75rem;

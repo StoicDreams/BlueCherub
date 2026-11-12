@@ -21,10 +21,16 @@
         <circle cx="256" cy="186" r="13"/>
       </g>
       <g id="eyes">
-        <ellipse cx="176" cy="148" rx="17" ry="23" fill="#fff"/>
-        <ellipse cx="234" cy="148" rx="17" ry="23" fill="#fff"/>
-        <circle cx="172" cy="154" r="7" fill="#111" stroke="none"/>
-        <circle cx="230" cy="154" r="7" fill="#111" stroke="none"/>
+        <g id="eyes-open">
+          <ellipse cx="176" cy="148" rx="17" ry="23" fill="#fff"/>
+          <ellipse cx="234" cy="148" rx="17" ry="23" fill="#fff"/>
+          <circle cx="172" cy="154" r="7" fill="#111" stroke="none"/>
+          <circle cx="230" cy="154" r="7" fill="#111" stroke="none"/>
+        </g>
+        <g id="eyes-closed" fill="none">
+          <path d="M160,150 Q176,162 192,150"/>
+          <path d="M218,150 Q234,162 250,150"/>
+        </g>
       </g>
       <path id="mouth" d="M188,196 Q206,210 224,196" fill="none"/>
     </g>

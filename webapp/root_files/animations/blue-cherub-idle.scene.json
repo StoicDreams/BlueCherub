@@ -5,14 +5,119 @@
     "frameCount": 48,
     "holdFrames": 2,
     "tracks": [
-        { "part": "body", "property": "y", "keys": [{ "frame": 0, "value": 0 }, { "frame": 24, "value": -8 }, { "frame": 48, "value": 0 }] },
-        { "part": "wing-back", "property": "rotate", "keys": [
-            { "frame": 0, "value": 0 }, { "frame": 6, "value": -18 }, { "frame": 12, "value": 0 }, { "frame": 18, "value": -18 },
-            { "frame": 24, "value": 0 }, { "frame": 30, "value": -18 }, { "frame": 36, "value": 0 }, { "frame": 42, "value": -18 },
-            { "frame": 48, "value": 0 }] },
-        { "part": "head", "property": "rotate", "keys": [{ "frame": 0, "value": -2 }, { "frame": 24, "value": 2 }, { "frame": 48, "value": -2 }] },
-        { "part": "hair-curl", "property": "rotate", "keys": [{ "frame": 0, "value": 8 }, { "frame": 24, "value": -8 }, { "frame": 48, "value": 8 }] },
-        { "part": "eyes", "property": "scaleY", "keys": [
-            { "frame": 0, "value": 1, "ease": "step" }, { "frame": 38, "value": 0.1, "ease": "step" }, { "frame": 40, "value": 1, "ease": "step" }] }
+        {
+            "part": "body",
+            "property": "y",
+            "keys": [
+                {
+                    "frame": 0,
+                    "value": 0
+                },
+                {
+                    "frame": 24,
+                    "value": -8
+                },
+                {
+                    "frame": 48,
+                    "value": 0
+                }
+            ]
+        },
+        {
+            "part": "wing-back",
+            "property": "rotate",
+            "keys": [
+                {
+                    "frame": 0,
+                    "value": 0
+                },
+                {
+                    "frame": 6,
+                    "value": -18
+                },
+                {
+                    "frame": 12,
+                    "value": 0
+                },
+                {
+                    "frame": 18,
+                    "value": -18
+                },
+                {
+                    "frame": 24,
+                    "value": 0
+                },
+                {
+                    "frame": 30,
+                    "value": -18
+                },
+                {
+                    "frame": 36,
+                    "value": 0
+                },
+                {
+                    "frame": 42,
+                    "value": -18
+                },
+                {
+                    "frame": 48,
+                    "value": 0
+                }
+            ]
+        },
+        {
+            "part": "head",
+            "property": "rotate",
+            "keys": [
+                {
+                    "frame": 0,
+                    "value": -2
+                },
+                {
+                    "frame": 24,
+                    "value": 2
+                },
+                {
+                    "frame": 48,
+                    "value": -2
+                }
+            ]
+        },
+        {
+            "part": "hair-curl",
+            "property": "rotate",
+            "keys": [
+                {
+                    "frame": 0,
+                    "value": 8
+                },
+                {
+                    "frame": 24,
+                    "value": -8
+                },
+                {
+                    "frame": 48,
+                    "value": 8
+                }
+            ]
+        },
+        {
+            "part": "eyes",
+            "property": "swap",
+            "keys": [
+                {
+                    "frame": 0,
+                    "value": 0
+                },
+                {
+                    "frame": 38,
+                    "value": 1
+                },
+                {
+                    "frame": 40,
+                    "value": 0
+                }
+            ]
+        }
     ]
 }
