@@ -340,54 +340,125 @@ fn parent_order(rig: &Rig, ids: &[String]) -> Result<Vec<usize>, String> {
     Ok(order)
 }
 
-/// Work out every part's transform and opacity for every frame.
-pub fn evaluate(mut request: EvaluateRequest) -> Result<FrameTable, String> {
-    validate(&mut request)?;
-    let rig = &request.rig;
-    let scene = &request.scene;
-    let mut ids: Vec<String> = rig.parts.keys().cloned().collect();
-    ids.sort();
-    let index: HashMap<&str, usize> = ids.iter().enumerate().map(|(i, id)| (id.as_str(), i)).collect();
-    let order = parent_order(rig, &ids)?;
-    let pivots: Vec<[f64; 2]> = ids.iter().map(|id| rig.parts[id].pivot).collect();
-    let parents: Vec<Option<usize>> = ids
-        .iter()
-        .map(|id| rig.parts[id].parent.as_ref().map(|p| index[p.as_str()]))
-        .collect();
-    let dom_parents: Vec<Option<usize>> = ids
-        .iter()
-        .map(|id| request.dom_parents.get(id).map(|p| index[p.as_str()]))
-        .collect();
-    let tracks: Vec<(usize, &Track)> = scene.tracks.iter().map(|t| (index[t.part.as_str()], t)).collect();
+/// A checked request, with parts in a fixed order, ready to pose any frame.
+struct Prepared<'a> {
+    scene: &'a Scene,
+    ids: Vec<String>,
+    order: Vec<usize>,
+    pivots: Vec<[f64; 2]>,
+    parents: Vec<Option<usize>>,
+    dom_parents: Vec<Option<usize>>,
+    tracks: Vec<(usize, &'a Track)>,
+}
 
-    let count = ids.len();
-    let mut values = Vec::with_capacity(scene.frame_count as usize * count * VALUES_PER_PART);
-    let mut poses = vec![Pose::default(); count];
-    let mut world = vec![Matrix::IDENTITY; count];
-    for frame in 0..scene.frame_count {
-        let held = frame - frame % scene.hold_frames;
+impl<'a> Prepared<'a> {
+    fn new(request: &'a EvaluateRequest) -> Result<Prepared<'a>, String> {
+        let rig = &request.rig;
+        let mut ids: Vec<String> = rig.parts.keys().cloned().collect();
+        ids.sort();
+        let index: HashMap<&str, usize> = ids.iter().enumerate().map(|(i, id)| (id.as_str(), i)).collect();
+        let order = parent_order(rig, &ids)?;
+        let pivots = ids.iter().map(|id| rig.parts[id].pivot).collect();
+        let parents = ids.iter().map(|id| rig.parts[id].parent.as_ref().map(|p| index[p.as_str()])).collect();
+        let dom_parents = ids.iter().map(|id| request.dom_parents.get(id).map(|p| index[p.as_str()])).collect();
+        let tracks = request.scene.tracks.iter().map(|t| (index[t.part.as_str()], t)).collect();
+        Ok(Prepared { scene: &request.scene, ids, order, pivots, parents, dom_parents, tracks })
+    }
+
+    /// Each part's pose and world transform (root coordinates) at a frame.
+    fn pose(&self, frame: u32, poses: &mut [Pose], world: &mut [Matrix]) {
+        let held = frame - frame % self.scene.hold_frames;
         poses.iter_mut().for_each(|pose| *pose = Pose::default());
-        for (part, track) in &tracks {
+        for (part, track) in &self.tracks {
             poses[*part].set(track.property, value_at(&track.keys, held));
         }
-        for &i in &order {
-            let local = poses[i].matrix(pivots[i]);
-            world[i] = match parents[i] {
+        for &i in &self.order {
+            let local = poses[i].matrix(self.pivots[i]);
+            world[i] = match self.parents[i] {
                 Some(p) => world[p].then(local),
                 None => local,
             };
         }
+    }
+}
+
+/// Work out every part's transform and opacity for every frame.
+pub fn evaluate(mut request: EvaluateRequest) -> Result<FrameTable, String> {
+    validate(&mut request)?;
+    let prepared = Prepared::new(&request)?;
+    let scene = &request.scene;
+    let count = prepared.ids.len();
+    let mut values = Vec::with_capacity(scene.frame_count as usize * count * VALUES_PER_PART);
+    let mut poses = vec![Pose::default(); count];
+    let mut world = vec![Matrix::IDENTITY; count];
+    for frame in 0..scene.frame_count {
+        prepared.pose(frame, &mut poses, &mut world);
         for i in 0..count {
             // An element inside another part's element already gets that element's transform.
-            let applied = match dom_parents[i] {
+            let m = match prepared.dom_parents[i] {
                 Some(p) => world[p].inverse().unwrap_or(Matrix::IDENTITY).then(world[i]),
                 None => world[i],
             };
-            let m = applied;
             values.extend_from_slice(&[m.a, m.b, m.c, m.d, m.e, m.f, poses[i].opacity]);
         }
     }
-    Ok(FrameTable { fps: scene.fps, frame_count: scene.frame_count, parts: ids, values })
+    Ok(FrameTable { fps: scene.fps, frame_count: scene.frame_count, parts: prepared.ids, values })
+}
+
+/// One part's values at a frame, for the editor.
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PartPose {
+    pub x: f64,
+    pub y: f64,
+    pub rotate: f64,
+    pub scale_x: f64,
+    pub scale_y: f64,
+    pub opacity: f64,
+    /// The part's transform in root coordinates, as `a b c d e f`.
+    pub world: [f64; 6],
+    /// The parent's transform in root coordinates (identity with no parent), for turning drags into moves.
+    pub parent_world: [f64; 6],
+}
+
+/// Every part's values and transforms at one frame. The editor shows these and uses them to turn drags into keys.
+pub fn pose_at(mut request: EvaluateRequest, frame: u32) -> Result<HashMap<String, PartPose>, String> {
+    validate(&mut request)?;
+    if frame >= request.scene.frame_count {
+        return Err(format!("Frame {frame} is past the end of the scene"));
+    }
+    let prepared = Prepared::new(&request)?;
+    let count = prepared.ids.len();
+    let mut poses = vec![Pose::default(); count];
+    let mut world = vec![Matrix::IDENTITY; count];
+    prepared.pose(frame, &mut poses, &mut world);
+    let flat = |m: Matrix| [m.a, m.b, m.c, m.d, m.e, m.f];
+    Ok(prepared
+        .ids
+        .iter()
+        .enumerate()
+        .map(|(i, id)| {
+            let p = poses[i];
+            let parent = prepared.parents[i].map(|j| world[j]).unwrap_or(Matrix::IDENTITY);
+            (id.clone(), PartPose {
+                x: p.x,
+                y: p.y,
+                rotate: p.rotate,
+                scale_x: p.scale_x,
+                scale_y: p.scale_y,
+                opacity: p.opacity,
+                world: flat(world[i]),
+                parent_world: flat(parent),
+            })
+        })
+        .collect())
+}
+
+/// `pose_at` with the request as JSON, returning JSON.
+pub fn pose_at_json(request: &str, frame: u32) -> Result<String, String> {
+    let request: EvaluateRequest = serde_json::from_str(request).map_err(|e| format!("Invalid scene data: {e}"))?;
+    let poses = pose_at(request, frame)?;
+    serde_json::to_string(&poses).map_err(|e| e.to_string())
 }
 
 /// Evaluate a request given as JSON, and return the frame table as JSON.
@@ -541,6 +612,28 @@ mod tests {
     #[test]
     fn invalid_json_gives_a_message() {
         assert!(evaluate_json("{").unwrap_err().starts_with("Invalid scene data"));
+    }
+
+    #[test]
+    fn pose_at_reports_values_and_world_transforms() {
+        let r = request(&format!(
+            r#"{{{RIG},"scene":{{"formatVersion":1,"fps":24,"frameCount":5,"tracks":[
+                {{"part":"body","property":"x","keys":[{{"frame":0,"value":0,"ease":"linear"}},{{"frame":4,"value":8}}]}},
+                {{"part":"arm","property":"rotate","keys":[{{"frame":0,"value":30}}]}}]}}}}"#
+        ));
+        let poses = pose_at(r, 2).unwrap();
+        assert!(close(poses["body"].x, 4.0));
+        assert!(close(poses["arm"].rotate, 30.0));
+        assert!(close(poses["arm"].scale_x, 1.0));
+        // The arm's parent is the body, moved 4 to the right.
+        assert!(close(poses["arm"].parent_world[4], 4.0));
+        assert!(close(poses["body"].parent_world[4], 0.0));
+    }
+
+    #[test]
+    fn pose_at_refuses_frames_past_the_end() {
+        let r = request(&format!(r#"{{{RIG},"scene":{{"formatVersion":1,"fps":24,"frameCount":2}}}}"#));
+        assert!(pose_at(r, 2).unwrap_err().contains("past the end"));
     }
 
     #[test]

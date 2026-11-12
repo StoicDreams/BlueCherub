@@ -124,7 +124,7 @@
 
     webui.define("app-cherub-player", {
         attr: ['src', 'label', 'max-width'],
-        flags: ['autoplay'],
+        flags: ['autoplay', 'no-controls'],
         watchVisibility: true,
         props: {
             /** The frame on screen, or -1 before a scene loads. */
@@ -134,6 +134,14 @@
             /** True while the animation is set to play. */
             playing: {
                 get() { return this._playing; }
+            },
+            /** The <svg> on screen, for editors that draw over it or hit-test it. */
+            svgElement: {
+                get() { return this._stage.firstElementChild; }
+            },
+            /** The number of frames in the loaded scene, or 0. */
+            frameCount: {
+                get() { return this._table ? this._table.frameCount : 0; }
             },
         },
         constructor() {
@@ -169,6 +177,9 @@
                     break;
                 case 'visible':
                     t._updateRunning();
+                    break;
+                case 'noControls':
+                    t._updateToggle();
                     break;
             }
         },
@@ -224,12 +235,36 @@
                     part.el.setAttribute('opacity', opacity);
                 }
             }
+            t.dispatchEvent(new CustomEvent('framechange', { detail: { frame } }));
+        },
+        /**
+         * Re-evaluate a changed scene for the same SVG and rig, keeping the drawing and the frame on screen.
+         * Resolves to `{ ok, error }`. Editors call this after every change.
+         */
+        async updateScene(scene) {
+            const t = this;
+            if (!t._rigData) return { ok: false, error: 'No scene is loaded' };
+            const token = ++t._loadToken;
+            try {
+                await workerReady();
+                const json = await webui.worker.evaluate_scene(JSON.stringify({ rig: t._rigData, scene, domParents: t._domParents }));
+                if (token !== t._loadToken) return { ok: false, error: 'Replaced by a newer scene' };
+                const table = JSON.parse(json);
+                const frame = Math.min(Math.max(t._frame, 0), table.frameCount - 1);
+                t._table = table;
+                t._frame = -1;
+                t.showFrame(frame);
+                t._updateToggle();
+                return { ok: true };
+            } catch (ex) {
+                return { ok: false, error: String(ex && ex.message || ex) };
+            }
         },
         _updateToggle() {
             const t = this;
             t._toggle.innerHTML = t._playing ? icons.pause : icons.play;
             t._toggle.setAttribute('aria-label', t._playing ? 'Pause animation' : 'Play animation');
-            t._toggle.hidden = !t._table;
+            t._toggle.hidden = !t._table || !!t.noControls;
         },
         _updateRunning() {
             const t = this;
@@ -278,6 +313,8 @@
             t._table = null;
             t._parts = [];
             t._frame = -1;
+            t._rigData = null;
+            t._domParents = null;
             t.removeAttribute('error');
             t.removeAttribute('loaded');
             t._updateToggle();
@@ -324,6 +361,8 @@
                         };
                     });
                 t._table = table;
+                t._rigData = rig;
+                t._domParents = domParents;
                 const viewBox = (svg.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
                 t._stage.style.aspectRatio = viewBox.length === 4 && viewBox[2] > 0 && viewBox[3] > 0 ? `${viewBox[2]} / ${viewBox[3]}` : '';
                 t._stage.replaceChildren(svg);

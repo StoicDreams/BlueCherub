@@ -1,8 +1,8 @@
-<webui-data data-page-title="Studio" data-page-subtitle="Rig a character"></webui-data>
+<webui-data data-page-title="Studio" data-page-subtitle="Rig and animate"></webui-data>
 
 <webui-restrict-to-role role="1">
     <template slot="valid">
-        <app-cherub-rigger></app-cherub-rigger>
+        <app-cherub-studio></app-cherub-studio>
     </template>
     <template slot="invalid">
         <webui-quote theme="info">

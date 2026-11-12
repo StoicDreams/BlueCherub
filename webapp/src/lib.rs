@@ -16,6 +16,17 @@ pub fn evaluate_scene(request: String) -> Result<String, String> {
     scene::evaluate_json(&request)
 }
 
+/// Every part's values (`x`, `y`, `rotate`, `scaleX`, `scaleY`, `opacity`) and root-space transforms at a frame.
+/// Takes the same JSON request as `evaluate_scene`.
+/// example
+/// ```javascript,ignore
+/// let poses = JSON.parse(await webui.worker.pose_at(JSON.stringify(request), 12));
+/// ```
+#[wasm_bindgen]
+pub fn pose_at(request: String, frame: u32) -> Result<String, String> {
+    scene::pose_at_json(&request, frame)
+}
+
 /// Get UUID generated from JavaScript.
 /// example
 /// ```javascript,ignore

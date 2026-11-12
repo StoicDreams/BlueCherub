@@ -724,7 +724,14 @@
             } else {
                 content.push(...t._propsFor(els[0]));
             }
+            const active = t.shadowRoot && t.shadowRoot.activeElement;
+            const focusId = active && t._props.contains(active) ? active.id || active.dataset.focus : null;
             t._props.replaceChildren(...content);
+            // Put focus back on the same control, so keyboard users keep their place.
+            if (focusId) {
+                const again = t._props.querySelector(`[id="${CSS.escape(focusId)}"], [data-focus="${CSS.escape(focusId)}"]`);
+                if (again) again.focus({ preventScroll: true });
+            }
         },
         _propsFor(target) {
             const t = this;
