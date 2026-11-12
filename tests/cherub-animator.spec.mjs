@@ -112,6 +112,37 @@ test.describe('app-cherub-animator', () => {
         await expect.poll(async () => track(await scene(animator), 'head', 'rotate').keys[0].value).not.toBe(before);
     });
 
+    test('scrubbing through every frame never moves the panel or the timeline', async ({ page }) => {
+        const animator = await openSample(page);
+        // The wing has keys on some frames and not others, and the scene animates on twos, so the notes change.
+        await animator.locator('.parts').getByRole('button', { name: 'wing-back' }).click();
+        const layout = () => animator.evaluate(el => {
+            const root = el.shadowRoot;
+            const place = node => {
+                const r = node.getBoundingClientRect();
+                return [Math.round(r.top), Math.round(r.left), Math.round(r.height), Math.round(r.width)].join(',');
+            };
+            return {
+                timeline: place(root.querySelector('.timeline')),
+                keyPose: place(root.querySelector('[data-focus="key-pose"]')),
+                ease: place(root.querySelector('#key-ease')),
+                library: place(root.querySelector('.library summary')),
+                stage: place(root.querySelector('.stage-wrap')),
+            };
+        });
+        await animator.evaluate(el => el.setFrame(0));
+        const first = await layout();
+        const moved = [];
+        for (let frame = 1; frame < 48; frame++) {
+            await animator.evaluate((el, f) => el.setFrame(f), frame);
+            const now = await layout();
+            for (const [name, place] of Object.entries(now)) {
+                if (place !== first[name]) moved.push(`${name} at frame ${frame}: ${first[name]} → ${place}`);
+            }
+        }
+        expect(moved).toEqual([]);
+    });
+
     test('changes easing, deletes keys, and keys a whole pose', async ({ page }) => {
         const animator = await openSample(page);
         await animator.getByRole('button', { name: 'wing-back key at frame 6' }).click();
@@ -230,7 +261,7 @@ test.describe('app-cherub-animator swaps and library', () => {
         await expect(animator.locator('.status')).toContainText('Saved the action “Flap” (12 frames)');
         // On twos, an odd frame shows the frame before it, and the panel says so.
         await animator.getByLabel('Frame', { exact: true }).fill('7');
-        await expect(animator.getByText('animates on twos, so frame 7 shows frame 6')).toBeVisible();
+        await expect(animator.getByText('On twos, frame 7 shows the frame before it')).toBeVisible();
         const flap = (await scene(animator)).library.actions.Flap;
         expect(flap.tracks.map(tr => tr.part)).toEqual(['wing-back']);
         expect(flap.tracks[0].keys.map(k => [k.frame, k.value])).toEqual([[0, 0], [6, -18], [12, 0]]);

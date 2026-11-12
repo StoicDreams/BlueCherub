@@ -4,27 +4,61 @@ import { join } from 'node:path';
 
 const GUIDE = join(ROOT_FILES, 'guide', 'studio-guide.md');
 
-/** Every studio screenshot a file refers to, such as /img/screenshots/studio/rig-layers.png. */
+/** Every studio screenshot and clip a file refers to, such as /img/screenshots/studio/rig-layers.png. */
 function screenshotRefs(file) {
-    return [...readText(file).matchAll(/\/img\/screenshots\/studio\/[\w-]+\.png/g)].map(match => match[0]);
+    return [...readText(file).matchAll(/\/img\/screenshots\/studio\/[\w-]+\.(png|mp4)/g)].map(match => match[0]);
 }
 
 test.describe('app-feature', () => {
-    test('shows each studio feature on the home page with a screenshot that loads', async ({ page }) => {
+    test('shows each studio feature on the home page with a picture or clip that loads', async ({ page }) => {
         await openPage(page, '/');
         const features = page.locator('app-feature');
-        await expect(features).toHaveCount(6);
+        await expect(features).toHaveCount(7);
         await expect(features.first().getByRole('heading', { name: 'Rig any drawing' })).toBeVisible();
         for (const feature of await features.all()) {
             await feature.scrollIntoViewIfNeeded();
-            const img = feature.locator('img');
-            await expect(img).toHaveAttribute('alt', /\w/);
-            await expect.poll(() => img.evaluate(el => el.complete && el.naturalWidth)).toBeGreaterThan(0);
-            // The screenshot links to its full-size image.
-            await expect(feature.getByRole('link')).toHaveAttribute('href', await img.getAttribute('src'));
+            const src = await feature.getAttribute('src');
+            const video = await feature.getAttribute('video');
+            if (video) {
+                // A clip, with the still as its poster.
+                const clip = feature.locator('video');
+                await expect(clip).toBeVisible();
+                await expect(clip).toHaveAttribute('poster', src);
+                await expect(clip).toHaveAttribute('aria-label', /\w/);
+                await expect.poll(() => clip.evaluate(el => el.readyState)).toBeGreaterThan(0);
+                await expect(feature.getByRole('link')).toHaveCount(0);
+            } else {
+                const img = feature.locator('img');
+                await expect(img).toHaveAttribute('alt', /\w/);
+                await expect.poll(() => img.evaluate(el => el.complete && el.naturalWidth)).toBeGreaterThan(0);
+                // The screenshot links to its full-size image.
+                await expect(feature.getByRole('link')).toHaveAttribute('href', src);
+            }
         }
         // Every other feature puts its picture on the right.
         await expect(features.nth(1)).toHaveAttribute('reverse', '');
+    });
+
+    test('plays clips on screen, with a button to pause them', async ({ page }) => {
+        await openPage(page, '/');
+        const feature = page.locator('app-feature[video]').first();
+        await feature.scrollIntoViewIfNeeded();
+        const clip = feature.locator('video');
+        await expect.poll(() => clip.evaluate(el => !el.paused)).toBe(true);
+        await feature.getByRole('button', { name: 'Pause clip' }).click();
+        await expect.poll(() => clip.evaluate(el => el.paused)).toBe(true);
+        await feature.getByRole('button', { name: 'Play clip' }).click();
+        await expect.poll(() => clip.evaluate(el => !el.paused)).toBe(true);
+    });
+
+    test('never starts clips for visitors who prefer reduced motion', async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await openPage(page, '/');
+        const feature = page.locator('app-feature[video]').first();
+        await feature.scrollIntoViewIfNeeded();
+        await expect(feature.getByRole('button', { name: 'Play clip' })).toBeVisible();
+        await page.waitForTimeout(500);
+        expect(await feature.locator('video').evaluate(el => el.paused)).toBe(true);
     });
 
     test('stacks the picture above the text on narrow screens', async ({ page }) => {
@@ -33,15 +67,15 @@ test.describe('app-feature', () => {
         // The second feature puts its picture on the right when there's room.
         const feature = page.locator('app-feature').nth(1);
         await feature.scrollIntoViewIfNeeded();
-        const [shot, text] = await feature.evaluate(el => ['.shot', '.text'].map(s => el.shadowRoot.querySelector(s).getBoundingClientRect().top));
+        const [shot, text] = await feature.evaluate(el => ['.clip', '.text'].map(s => el.shadowRoot.querySelector(s).getBoundingClientRect().top));
         expect(shot).toBeLessThan(text);
     });
 
-    test('every screenshot the home page and guide use exists', () => {
+    test('every screenshot and clip the home page and guide use exists', () => {
         const refs = [...screenshotRefs(join(WEBAPP, 'd', 'root.md')), ...screenshotRefs(GUIDE)];
-        expect(refs.length).toBeGreaterThan(5);
+        expect(refs.filter(ref => ref.endsWith('.mp4')).length).toBeGreaterThan(4);
         const missing = refs.filter(ref => !existsSync(join(ROOT_FILES, ref)));
-        expect(missing, 'Run PowerShell/screenshots.ps1, or fix the image path').toEqual([]);
+        expect(missing, 'Run PowerShell/screenshots.ps1 (clips need ffmpeg), or fix the path').toEqual([]);
     });
 });
 
@@ -50,7 +84,7 @@ test.describe('guide', () => {
         await openPage(page, '/guide');
         await expect(page.getByRole('heading', { name: 'Getting started' })).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Keyboard shortcuts' })).toBeVisible();
-        await expect(page.locator('app-feature')).toHaveCount(6);
+        await expect(page.locator('app-feature')).toHaveCount(7);
     });
 
     test('the studio has a Help bubble with the same guide', async ({ page }) => {

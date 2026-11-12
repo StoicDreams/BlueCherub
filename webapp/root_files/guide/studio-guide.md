@@ -18,14 +18,14 @@ Nothing is saved in your browser yet. Download your rig and scene before you lea
 - **Clean up groups** removes empty groups and groups that only wrap one thing.
 - Type a new **Name** and press Enter to rename a shape. Names start with a letter and use letters, numbers, - and _.
 
-<app-feature src="/img/screenshots/studio/rig-pivots.png" alt="A selected arm with its pivot dot at the shoulder, and lines joining each part to the part it hangs from" reverse>
+<app-feature src="/img/screenshots/studio/rig-pivots.png" video="/img/screenshots/studio/rig-pivots.mp4" alt="A selected arm with its pivot dot at the shoulder, and lines joining each part to the part it hangs from" reverse>
 <h3>Parts, pivots, and attachments</h3>
 <p>Select a shape or group and press <strong>Make this a part</strong>. Only parts can be animated.</p>
 <p>The yellow dot is the part's <strong>pivot</strong>, the point it turns around. Drag it to the joint, type X and Y, or press <strong>Suggest pivot</strong>. Choose what the part is <strong>Attached to</strong>, so it moves with that part. The purple lines show the attachments.</p>
 <p>Press <strong>Test</strong> to swing the part and check its pivot and attachments.</p>
 </app-feature>
 
-<app-feature src="/img/screenshots/studio/rig-swaps.png" alt="The eyes part with two swap drawings listed: eyes open and eyes closed">
+<app-feature src="/img/screenshots/studio/rig-swaps.png" video="/img/screenshots/studio/rig-swaps.mp4" alt="The eyes part with two swap drawings listed: eyes open and eyes closed">
 <h3>Swap drawings</h3>
 <p>For things that change instead of bend, like eyes open and closed, put each version in its own group inside one part. Select the part and press <strong>Use its groups as swaps</strong>.</p>
 <p>The drawing marked <strong>At rest</strong> shows by default. Click a drawing's name to see it on the stage, use <strong>Use at rest</strong> to change the default, and <strong>Remove</strong> or <strong>Stop swapping</strong> to undo it.</p>
@@ -35,13 +35,13 @@ When the rig is ready, press **Download rig**. You get two files, `name.svg` and
 
 ## Animate
 
-<app-feature src="/img/screenshots/studio/animate-timeline.png" alt="The Animate tab, with a timeline of keys for each part below the drawing" reverse>
+<app-feature src="/img/screenshots/studio/animate-timeline.png" video="/img/screenshots/studio/animate-timeline.mp4" alt="The Animate tab, with a timeline of keys for each part below the drawing" reverse>
 <h3>The timeline</h3>
 <p>Open the <strong>Animate</strong> tab. It uses the rig from the Rig tab. Each part has a lane, and each diamond is a <strong>key</strong>: a value the part has at that frame. Between keys, the studio fills in the motion.</p>
 <p>Drag the frame slider, use the arrow buttons, or click a key to jump to it. Set <strong>Frames per second</strong> and <strong>Length</strong>. <strong>Animate on twos</strong> holds each pose for two frames, for a hand-drawn look.</p>
 </app-feature>
 
-<app-feature src="/img/screenshots/studio/animate-pose.png" alt="The rotate tool aiming Blue Cherub's bow arm, with a ring around its pivot">
+<app-feature src="/img/screenshots/studio/animate-pose.png" video="/img/screenshots/studio/animate-pose.mp4" alt="The rotate tool aiming Blue Cherub's bow arm, with a ring around its pivot">
 <h3>Pose a part</h3>
 <p>Click a part on the drawing or in <strong>Parts</strong>. Drag it to move it, or press <strong>Rotate</strong> and drag around its pivot. You can also type X, Y, Rotate, Scale, and Opacity. A part with swap drawings has a <strong>Drawing</strong> list too.</p>
 <p>Every change becomes a key at the current frame, marked ◆. <strong>Key pose</strong> keys everything about the part here, and <strong>Delete keys</strong> removes its keys at this frame.</p>
@@ -51,13 +51,25 @@ When the rig is ready, press **Download rig**. You get two files, `name.svg` and
 - On twos, an odd frame shows the frame before it, so a key on an odd frame appears one frame later.
 - Press **Play** to watch. The values in the panel update when it stops.
 
-<app-feature src="/img/screenshots/studio/animate-library.png" alt="The library with a saved pose called Aim and a saved action called Flap" reverse>
+<app-feature src="/img/screenshots/studio/animate-library.png" video="/img/screenshots/studio/animate-library.mp4" alt="The library with a saved pose called Aim and a saved action called Flap" reverse>
 <h3>Reuse poses and actions</h3>
 <p>Open <strong>Library</strong>. Name a pose and press <strong>Save pose</strong> to keep the pose at this frame, for the whole character or just the selected part and what's attached to it. <strong>Apply</strong> keys it at any frame.</p>
 <p>An <strong>action</strong> is motion between two frames, like a wing flap. Set <strong>From frame</strong> and <strong>To frame</strong>, save it, then <strong>Insert</strong> it at the current frame as many times as you like. The scene gets longer if it needs to.</p>
 </app-feature>
 
 Press **Download scene** to save `name.scene.json`, which includes your library. **Open scene** loads it again on the same rig.
+
+## Export
+
+<app-feature src="/img/screenshots/studio/animate-export.png" alt="The export panel with MP4 video chosen at 720p, showing the size and length">
+<h3>Video or frames</h3>
+<p>Open <strong>Export: video or frames</strong> on the Animate tab. Choose <strong>MP4 video</strong> for YouTube, TikTok, and Instagram, or <strong>PNG frames</strong> for a zip with one image per frame. Pick a <strong>Size</strong> (360p to 4K), and a <strong>Background</strong> color. PNG frames can have a transparent background instead.</p>
+<p>Press <strong>Export</strong>. Each frame is drawn in your browser, so nothing is uploaded. <strong>Cancel</strong> stops it.</p>
+</app-feature>
+
+- The video is the shape of your drawing. Wide (16:9) and tall (9:16) framing for each platform is on the way.
+- MP4 export needs a browser that can make H.264 video, such as current Chrome, Edge, or Safari. PNG frames work everywhere.
+- Videos have no sound yet.
 
 ## Keyboard shortcuts
 
@@ -82,9 +94,10 @@ Click the drawing first, so the shortcuts reach the studio.
 | `name.svg` | Your drawing, with the groups and names you gave it. Your original file is never changed. |
 | `name.rig.json` | Parts, pivots, attachments, and swap drawings. |
 | `name.scene.json` | Frame rate, length, every key, and your library of poses and actions. |
+| `name.mp4`, `name-frames.zip` | Exports: the video, or one PNG per frame. |
 
 ## Good to know
 
 - The Blue Cherub character is free for personal, non-monetized projects. Your own drawings and animations are yours.
 - Keys past the last frame still shape the motion, but the timeline doesn't show them.
-- Exporting video, saving in your browser, and cloud saving are on the way.
+- Sound, saving in your browser, and cloud saving are on the way.

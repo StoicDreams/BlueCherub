@@ -147,7 +147,7 @@
     }
 
     webui.define("app-cherub-animator", {
-        preload: 'app:cherub-player',
+        preload: 'app:cherub-player app:cherub-export',
         props: {
             /** The scene as saved. */
             sceneData: {
@@ -183,6 +183,8 @@
             t._length = q('input[name="length"]');
             t._twos = q('input[name="twos"]');
             t._openInput = q('input[name="scene-file"]');
+            t._export = q('app-cherub-export');
+            t._export.source = () => t._rig ? { svg: t._svgText, rig: t._rig, scene: t.sceneData, name: t._name } : null;
             t._poseList = q('.pose-list');
             t._actionList = q('.action-list');
             t._form = {
@@ -616,6 +618,14 @@
             t._render();
             t._say(`Deleted the action “${name}”.`);
         },
+        /** Tell the export panel the scene's shape and length, for its size readout. */
+        _describeExport() {
+            const t = this;
+            if (typeof t._export.describe !== 'function') return;
+            const box = (t._player.svgElement && t._player.svgElement.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+            const aspect = box.length === 4 && box[2] > 0 && box[3] > 0 ? box[2] / box[3] : 1;
+            t._export.describe({ aspect, frameCount: t._scene.frameCount, fps: t._scene.fps });
+        },
         _renderLibrary() {
             const t = this;
             const { poses, actions } = t._scene.library;
@@ -812,6 +822,7 @@
             t._renderParts();
             t._renderPanel();
             t._renderLibrary();
+            t._describeExport();
             t._renderLanes();
             t._renderOverlay();
             if (focusKey && !(t.shadowRoot.activeElement && t.shadowRoot.activeElement.isConnected)) {
@@ -868,9 +879,15 @@
             easeSelect.addEventListener('change', () => t.setEase(part, easeSelect.value));
             t._panel.replaceChildren(
                 el('h3', { text: part }),
-                el('p', { class: 'note', text: keys.length ? `${keys.length} key${keys.length === 1 ? '' : 's'} at frame ${t._frame} (◆).` : `No keys at frame ${t._frame}. Changing a value adds one.` }),
-                t._scene.holdFrames === 2 && t._frame % 2 === 1
-                    ? el('p', { class: 'note', text: `This scene animates on twos, so frame ${t._frame} shows frame ${t._frame - 1}. Keys here appear on the next frame.` })
+                // These notes keep the same size on every frame, so scrubbing never moves the panel or the timeline.
+                el('p', { class: 'note fixed', text: keys.length ? `◆ ${keys.length} key${keys.length === 1 ? '' : 's'} at frame ${t._frame}.` : `No keys at frame ${t._frame} yet. Changing a value adds one.` }),
+                t._scene.holdFrames === 2
+                    ? el('p', {
+                        class: 'note fixed',
+                        style: t._frame % 2 === 1 ? '' : 'visibility:hidden',
+                        'aria-hidden': t._frame % 2 === 1 ? null : 'true',
+                        text: `On twos, frame ${t._frame - (t._frame % 2 === 1 ? 0 : 1) || 1} shows the frame before it. Keys here appear one frame later.`,
+                    })
                     : '',
                 el('div', { class: 'fields' }, fields),
                 el('label', { for: 'key-ease', text: 'From these keys to the next' }),
@@ -960,6 +977,9 @@
 <button type="button" data-action="save-action">Save action</button>
 <label for="action-repeat">Insert it this many times</label><input id="action-repeat" type="number" min="1" max="50" step="1" value="1">
 </div>
+</details>
+<details class="library export-box"><summary>Export: video or frames</summary>
+<app-cherub-export></app-cherub-export>
 </details>
 </div>
 </div>
@@ -1133,6 +1153,10 @@ gap:0.5rem;
 .note {
 font-size:0.9em;
 opacity:0.85;
+}
+.note.fixed {
+line-height:1.35;
+min-height:calc(2 * 1.35em);
 }
 .main > *, .side > *, .fields > *, .form > * {
 min-width:0;
