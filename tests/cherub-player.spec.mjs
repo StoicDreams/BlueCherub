@@ -90,3 +90,27 @@ test.describe('app-cherub-player', () => {
         expect(message).toContain('unknown part b');
     });
 });
+
+test.describe('app-cherub-player in moved groups', () => {
+    test('turns a part inside a transformed group around its root-space pivot', async ({ page }) => {
+        await openPage(page, '/');
+        const player = page.locator('app-cherub-player');
+        await expect(player).toHaveAttribute('loaded', '');
+        const point = await player.evaluate(async el => {
+            el.pause();
+            const result = await el.loadData({
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><g transform="translate(100 0)"><rect id="arm" width="10" height="10"/></g></svg>',
+                rig: { formatVersion: 1, parts: { arm: { pivot: [100, 0] } } },
+                scene: { formatVersion: 1, fps: 24, frameCount: 1, tracks: [{ part: 'arm', property: 'rotate', keys: [{ frame: 0, value: 90 }] }] },
+            });
+            if (!result.ok) return result.error;
+            const svg = el.shadowRoot.querySelector('.stage > svg');
+            const arm = svg.querySelector('#arm');
+            const m = window.appCherub.parentMatrix(arm, svg).multiply(window.appCherub.ownMatrix(arm));
+            const p = m.transformPoint(new DOMPoint(10, 0));
+            return [Math.round(p.x), Math.round(p.y)];
+        });
+        // The rect's far corner (110, 0) swings a quarter turn around (100, 0).
+        expect(point).toEqual([100, 10]);
+    });
+});

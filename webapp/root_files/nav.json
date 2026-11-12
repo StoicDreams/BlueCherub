@@ -3,5 +3,10 @@
         "name": "Home",
         "icon": "circle_emoji-house|theme:title|backing|inverted",
         "url": "/"
+    },
+    {
+        "name": "Studio",
+        "icon": "circle_paintbrush|theme:title|backing|inverted",
+        "url": "/studio"
     }
 ]

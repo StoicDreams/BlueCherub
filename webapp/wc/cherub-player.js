@@ -88,8 +88,33 @@
         return { scene, rig, svg };
     }
 
+    /** An element's own transform attribute, as a DOMMatrix. */
+    function ownMatrix(el) {
+        const transform = el.transform && el.transform.baseVal.consolidate();
+        return transform ? DOMMatrix.fromMatrix(transform.matrix) : new DOMMatrix();
+    }
+
+    /**
+     * The static transform from the root <svg> to an element's parent: every ancestor's transform attribute, outermost first.
+     * Rig pivots and animation are in root coordinates, so a part inside transformed groups needs this to convert.
+     */
+    function parentMatrix(el, root) {
+        const chain = [];
+        for (let node = el.parentElement; node && node !== root; node = node.parentElement) chain.unshift(node);
+        return chain.reduce((matrix, node) => matrix.multiply(ownMatrix(node)), new DOMMatrix());
+    }
+
+    function matrixText(m) {
+        return `matrix(${[m.a, m.b, m.c, m.d, m.e, m.f].map(v => +v.toFixed(4)).join(' ')})`;
+    }
+
+    function isIdentity(m) {
+        return [m.a - 1, m.b, m.c, m.d - 1, m.e, m.f].every(v => Math.abs(v) < 1e-9);
+    }
+
+    // Shared with the rig editor.
     window.appCherub = window.appCherub || {};
-    window.appCherub.sanitizeSvg = sanitizeSvg;
+    Object.assign(window.appCherub, { sanitizeSvg, workerReady, ownMatrix, parentMatrix, matrixText, isIdentity });
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const icons = {
@@ -184,7 +209,10 @@
             const stride = table.parts.length * 7;
             for (const part of t._parts) {
                 const at = frame * stride + part.index * 7;
-                const matrix = `matrix(${values.slice(at, at + 6).map(v => +v.toFixed(4)).join(' ')})`;
+                let animated = new DOMMatrix(values.slice(at, at + 6));
+                // Inside transformed groups, move the root-space animation into the parent's own coordinates.
+                if (part.toParent) animated = part.toParent.multiply(animated).multiply(part.fromParent);
+                const matrix = matrixText(animated);
                 const transform = part.original ? `${matrix} ${part.original}` : matrix;
                 if (transform !== part.lastTransform) {
                     part.lastTransform = transform;
@@ -228,9 +256,24 @@
             t.showFrame((now - t._startTime) * t._table.fps / 1000);
             t._raf = requestAnimationFrame(t._tick);
         },
-        async _load(src) {
+        _load(src) {
             const t = this;
-            const token = ++t._loadToken;
+            if (!src) {
+                t._reset();
+                t._stage.replaceChildren();
+                return;
+            }
+            t._present(() => loadScene(src), src);
+        },
+        /**
+         * Play a scene from data in memory instead of from files, as the editor does.
+         * `svg` is SVG text, and is sanitized like a loaded file. Returns a promise that settles when it's ready.
+         */
+        loadData({ svg, rig, scene }) {
+            return this._present(async () => ({ scene, rig, svg: sanitizeSvg(svg) }), 'scene data');
+        },
+        _reset() {
+            const t = this;
             t.pause();
             t._table = null;
             t._parts = [];
@@ -238,13 +281,14 @@
             t.removeAttribute('error');
             t.removeAttribute('loaded');
             t._updateToggle();
-            if (!src) {
-                t._stage.replaceChildren();
-                return;
-            }
+            return ++t._loadToken;
+        },
+        async _present(getData, source) {
+            const t = this;
+            const token = t._reset();
             try {
-                const { scene, rig, svg } = await loadScene(src);
-                if (token !== t._loadToken) return;
+                const { scene, rig, svg } = await getData();
+                if (token !== t._loadToken) return { ok: false, error: 'Replaced by a newer scene' };
                 const elements = {};
                 const domParents = {};
                 const partIds = Object.keys(rig.parts || {});
@@ -263,16 +307,22 @@
                 }
                 await workerReady();
                 const tableJson = await webui.worker.evaluate_scene(JSON.stringify({ rig, scene, domParents }));
-                if (token !== t._loadToken) return;
+                if (token !== t._loadToken) return { ok: false, error: 'Replaced by a newer scene' };
                 const table = JSON.parse(tableJson);
                 t._parts = table.parts
                     .map((id, index) => ({ id, index, el: elements[id] }))
                     .filter(part => part.el)
-                    .map(part => ({
-                        ...part,
-                        original: part.el.getAttribute('transform') || '',
-                        opacity: parseFloat(part.el.getAttribute('opacity') || '1'),
-                    }));
+                    .map(part => {
+                        const fromParent = parentMatrix(part.el, svg);
+                        const nested = !isIdentity(fromParent);
+                        return {
+                            ...part,
+                            original: part.el.getAttribute('transform') || '',
+                            opacity: parseFloat(part.el.getAttribute('opacity') || '1'),
+                            fromParent: nested ? fromParent : null,
+                            toParent: nested ? fromParent.inverse() : null,
+                        };
+                    });
                 t._table = table;
                 const viewBox = (svg.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
                 t._stage.style.aspectRatio = viewBox.length === 4 && viewBox[2] > 0 && viewBox[3] > 0 ? `${viewBox[2]} / ${viewBox[3]}` : '';
@@ -286,10 +336,12 @@
                     t._updateToggle();
                 }
             } catch (ex) {
-                if (token !== t._loadToken) return;
+                if (token !== t._loadToken) return { ok: false, error: 'Replaced by a newer scene' };
                 t.setAttribute('error', '');
-                console.warn('app-cherub-player could not load', src, ex);
+                console.warn('app-cherub-player could not load', source, ex);
+                return { ok: false, error: String(ex && ex.message || ex) };
             }
+            return { ok: true };
         },
         shadowTemplate: `
 <div class="stage" role="img"></div>
