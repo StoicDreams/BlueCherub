@@ -174,7 +174,7 @@ test.describe('app-cherub-rigger', () => {
 
         // Open them in a fresh page, with one part the SVG doesn't have.
         rig.parts.ghost = { pivot: [0, 0], parent: 'bc-1-1' };
-        await page.reload();
+        await openStudio(page);
         await expect(rigger.getByRole('button', { name: 'Open rig' })).toBeVisible();
         await rigger.locator('input[name="rig-files"]').setInputFiles([
             { name: 'my-character.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(files['my-character.svg']) },

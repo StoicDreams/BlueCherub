@@ -116,34 +116,36 @@ test.describe('app-cherub-animator', () => {
         const animator = await openSample(page);
         // The wing has keys on some frames and not others, and the scene animates on twos, so the notes change.
         await animator.locator('.parts').getByRole('button', { name: 'wing-back' }).click();
-        const layout = () => animator.evaluate(el => {
+        // Scrubs and measures inside the page, since a round trip per frame took longer than the timeout on a busy machine.
+        const moved = await animator.evaluate(async el => {
             const root = el.shadowRoot;
             const place = node => {
                 const r = node.getBoundingClientRect();
                 return [Math.round(r.top), Math.round(r.left), Math.round(r.height), Math.round(r.width)].join(',');
             };
-            return {
+            const layout = () => ({
                 timeline: place(root.querySelector('.timeline')),
                 keyPose: place(root.querySelector('[data-focus="key-pose"]')),
                 ease: place(root.querySelector('#key-ease')),
                 library: place(root.querySelector('.library summary')),
                 stage: place(root.querySelector('.stage-wrap')),
-            };
-        });
-        const moved = [];
-        // Run with this browser's font, then with wider letters, standing in for a wider fallback font on other systems.
-        for (const spacing of ['normal', '0.15em']) {
-            await animator.evaluate((el, value) => { el.style.letterSpacing = value; }, spacing);
-            await animator.evaluate(el => el.setFrame(0));
-            const first = await layout();
-            for (let frame = 1; frame < 48; frame++) {
-                await animator.evaluate((el, f) => el.setFrame(f), frame);
-                const now = await layout();
-                for (const [name, place] of Object.entries(now)) {
-                    if (place !== first[name]) moved.push(`${spacing} spacing, ${name} at frame ${frame}: ${first[name]} → ${place}`);
+            });
+            const moved = [];
+            // Run with this browser's font, then with wider letters, standing in for a wider fallback font on other systems.
+            for (const spacing of ['normal', '0.15em']) {
+                el.style.letterSpacing = spacing;
+                await el.setFrame(0);
+                const first = layout();
+                for (let frame = 1; frame < 48; frame++) {
+                    await el.setFrame(frame);
+                    const now = layout();
+                    for (const [name, place] of Object.entries(now)) {
+                        if (place !== first[name]) moved.push(`${spacing} spacing, ${name} at frame ${frame}: ${first[name]} → ${place}`);
+                    }
                 }
             }
-        }
+            return moved;
+        });
         expect(moved).toEqual([]);
     });
 

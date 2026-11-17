@@ -11,6 +11,8 @@ function screenshotRefs(file) {
 
 test.describe('app-feature', () => {
     test('shows each studio feature on the home page with a picture or clip that loads', async ({ page }) => {
+        // Loads all seven pictures and clips, which can take longer than the usual timeout on a slow or busy machine.
+        test.slow();
         await openPage(page, '/');
         const features = page.locator('app-feature');
         await expect(features).toHaveCount(7);
