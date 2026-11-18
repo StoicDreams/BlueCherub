@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+	<!-- Google tag (gtag.js) -->
+	<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T4EFW94W4"></script>
+	<script>
+		if (location.hostname !== 'localhost') {
+			window.dataLayer = window.dataLayer || [];
+			function gtag() { dataLayer.push(arguments); }
+			gtag('js', new Date());
+			gtag('config', 'G-1T4EFW94W4');
+		}
+	</script>
+	<title>Blue Cherub: Free Animation Studio</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="robots" content="index, follow">
+	<base href="/" />
+	<script type="text/javascript">
+		navigator.serviceWorker.register('service-worker.min.js');
+	</script>
+
+	<link rel="dns-prefetch" href="https://cdn.myfi.ws" />
+	<link rel="dns-prefetch" href="https://api.myfi.ws" />
+	<link rel="preconnect" href="https://cdn.myfi.ws">
+	<link rel="preconnect" href="https://api.myfi.ws">
+
+	<link href="Logo.svg?v=d8b2d80a23" rel="icon" type="image/svg+xml" sizes="any" />
+	<link rel="manifest" href="app.webmanifest?v=723e615360">
+
+	<script>
+		// Web UI loads from the local MyFiCDN server (MyFiCDN/PowerShell/RunLocal.ps1) when the site runs on localhost,
+		// so framework changes show before they are published, and from cdn.myfi.ws everywhere else.
+		window.webuiCdn = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) ? 'http://localhost:3180/' : 'https://cdn.myfi.ws/';
+		document.write('<link href="' + webuiCdn + 'css/webui.min.css" rel="stylesheet" />');
+	</script>
+	<link href="css/app.min.css?v=e26bddb1c1" rel="stylesheet" />
+	<script>document.write('<script src="' + webuiCdn + 'webui/loader.min.js"></' + 'script>');</script>
+
+	<!-- Prerendered pages from webapp_post_build prerender. Release builds copy them to the site root. -->
+
+	<!--Web Worker-->
+	<script type="module" src="main.js?v=c04679548f"></script>
+	<!--End Web Worker-->
+
+	<meta name="theme-color" content="#067ac7" />
+
+	<meta name="author" content="Erik Gassler">
+	<meta name="description" content="Blue Cherub is a free animation studio in your browser: import an SVG, rig it with pivots and swaps, animate on a timeline, and export MP4 or PNG frames.">
+
+	<meta property="og:type" content="website">
+	<meta property="og:site_name" content="Blue Cherub">
+	<meta property="og:image" content="https://www.bluecherub.com/blue-cherub-share.jpg">
+	<meta property="og:image:width" content="1200">
+	<meta property="og:image:height" content="630">
+	<meta property="og:image:alt" content="Blue Cherub, a little blue cupid with a bow, beside the words Free animation studio">
+	<meta property="og:title" content="Blue Cherub: Free Animation Studio">
+	<meta property="og:url" content="https://www.bluecherub.com/">
+	<meta property="og:description" content="Blue Cherub is a free animation studio in your browser: import an SVG, rig it with pivots and swaps, animate on a timeline, and export MP4 or PNG frames.">
+
+	<meta name="twitter:card" content="summary_large_image">
+	<meta name="twitter:title" content="Blue Cherub: Free Animation Studio">
+	<meta name="twitter:url" content="https://www.bluecherub.com/">
+	<meta name="twitter:site" content="@stoicdreamsllc">
+	<meta name="twitter:description" content="Blue Cherub is a free animation studio in your browser: import an SVG, rig it with pivots and swaps, animate on a timeline, and export MP4 or PNG frames.">
+	<meta name="twitter:image" content="https://www.bluecherub.com/blue-cherub-share.jpg">
+	<meta name="twitter:image:alt" content="Blue Cherub, a little blue cupid with a bow, beside the words Free animation studio">
+	<link rel="modulepreload" href="https://cdn.myfi.ws/js/mdparse.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="/wc/cherub-player.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="/wc/feature.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/alerts.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/app.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/app-config.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/data.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/drawer.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/feedback.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/flex.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/icon.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/link.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/myfi-info.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/nav.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/next-page.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/page-footer.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/page-segment.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/pinned-side.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/stoic-dreams-logo.min.js" crossorigin="anonymous" />
+	<link rel="preload" as="script" href="https://cdn.myfi.ws/webui/stoic-social-links.min.js" crossorigin="anonymous" />
+	<meta name="webui-prerender" content="ed85f4ee78">
+</head>
+
+<body>
+	<webui-app-config src="appConfig.json"></webui-app-config>
+	<webui-app data-removeclass=".nav|open;.shared|open">
+		<div data-prerendered>
+<h2>Make your drawings move. Free.</h2>
+<p>Blue Cherub is a free animation studio that runs in your browser. Bring an SVG drawing, rig it, and animate it on a timeline. There's no paywall, no premium tier, and no catch. The cherub is the only one here who causes trouble.</p>
+
+<p>Open the studio
+Read the guide</p>
+
+
+
+<h3>Rig any drawing</h3>
+<p>Import any SVG. Most drawings aren't built for animation, so the studio assumes yours isn't either. Pick shapes on the drawing or in the layers, group and ungroup them without anything moving, clean up groups that do nothing, and name the pieces.</p>
+
+
+<h3>Pivots and attachments</h3>
+<p>Mark the pieces that move as parts. Drag each part's pivot to the joint it turns around, and attach parts to each other, so a hand follows the arm and the arm follows the body. Press Test to watch a part swing before you animate anything.</p>
+
+
+<h3>Swap drawings</h3>
+<p>Some things don't bend, they change. Give a part alternate drawings, like eyes open and closed, or a smile and a scream, and switch between them on any frame.</p>
+
+
+<h3>Animate on a timeline</h3>
+<p>Every part gets a lane of keys. Scrub to a frame, pose the character, and each change becomes a key. Choose how motion eases between keys, set the frame rate and length, and animate on twos for that hand-drawn feel.</p>
+
+
+<h3>Pose by hand</h3>
+<p>Drag a part to move it, or switch to Rotate and swing it around its pivot. Prefer numbers? Type the position, angle, scale, or opacity. Undo is never more than a Ctrl+Z away.</p>
+
+
+<h3>Poses and actions you can reuse</h3>
+<p>Save a pose, then drop it onto any frame. Save a stretch of motion as an action, like a wing flap, and insert it anywhere, as many times as you like. The scene grows to fit.</p>
+
+
+<h3>Export video or frames</h3>
+<p>Export an MP4 video, ready for YouTube, TikTok, or Instagram, or every frame as a PNG with a transparent background if you like. Pick the size, from 360p to 4K. It all happens in your browser, so your work never leaves your computer.</p>
+
+
+<h2>Yours to keep</h2>
+<p>Rigs, scenes, and videos download as plain files you own. Sign in to open the studio. Everything in it is free.</p>
+
+<p>Open the studio
+Read the guide</p>
+		</div>
+		<webui-drawer slot="left" class="nav elevation-20" docked="true" data-state="slot|docked" data-moveable data-dockable>
+			<webui-flex justify="center" slot="header">
+				<webui-stoic-dreams-logo title="Blue Cherub Logo" text="Blue" text2="Cherub"></webui-stoic-dreams-logo>
+			</webui-flex>
+			<webui-nav routes="/nav.json" data-subscribe="app-nav-routes:setNavRoutes"></webui-nav>
+		</webui-drawer>
+		<webui-drawer slot="right" class="shared elevation-20" data-stopclick data-moveable data-state="slot">
+		</webui-drawer>
+		<header slot="header">
+			<button aria-label="open navigation menu" data-toggleclass=".nav|open" class="elevation-10 pa-1 mx-1">
+				<webui-icon icon="hamburger"></webui-icon>
+			</button>
+			<h1 data-subscribe="page-title:innerHTML">Blue Cherub</h1>
+			<h2 data-subscribe="page-subtitle:innerHTML">Free animation studio</h2>
+			<webui-flex grow></webui-flex>
+			<webui-feedback title="Provide us your feedback" data-post="https://api.myfi.ws/feedback/new" data-json-name="message">
+				<p>You can also come <a href="https://discord.gg/5X4YSDFdHD">chat with us on the Stoic Dreams discord server.</a></p>
+			</webui-feedback>
+			<webui-alerts title="View your notifications" data-title="My Alerts" data-toggleclass=".shared|open"></webui-alerts>
+			<webui-myfi-info sign-in-label="Sign In">
+				<template slot="panel-content">
+					<webui-alert show variant="info">Example Account Panel</webui-alert>
+				</template>
+			</webui-myfi-info>
+		</header>
+		<noscript>Javascript is required to view this site</noscript>
+		<webui-page-footer copyright="2014" company="Stoic Dreams">
+			<webui-next-page theme="tertiary" data-subscribe="page-next-page"></webui-next-page>
+			<webui-flex class="my-3" justify="center" wrap>
+				<webui-link href="/about" icon="circle_exclamation|backing|bordered">About Blue Cherub</webui-link>
+				<webui-link href="/contact" icon="messages|fill|shade:tri">Contact Stoic Dreams</webui-link>
+				<webui-link href="/privacy" icon="shield_exclamation|backing|bordered">Privacy</webui-link>
+				<webui-link href="/terms" icon="handshake|fill|shade:tri">Terms & Conditions</webui-link>
+			</webui-flex>
+			<webui-stoic-social-links class="mb-2"></webui-stoic-social-links>
+		</webui-page-footer>
+	</webui-app>
+</body>
+
+</html>

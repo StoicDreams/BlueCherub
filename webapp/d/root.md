@@ -1,4 +1,4 @@
-<webui-data data-page-title="{APP_NAME}" data-page-subtitle="Free animation studio"></webui-data>
+<webui-data data-page-title="{APP_NAME}" data-page-subtitle="Free animation studio" data-page-description="Blue Cherub is a free animation studio in your browser: import an SVG, rig it with pivots and swaps, animate on a timeline, and export MP4 or PNG frames."></webui-data>
 
 <webui-pinned-side>
 

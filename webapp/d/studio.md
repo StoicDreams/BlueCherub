@@ -1,4 +1,4 @@
-<webui-data data-page-title="Studio" data-page-subtitle="Rig and animate"></webui-data>
+<webui-data data-page-title="Studio" data-page-subtitle="Rig and animate" data-page-description="The Blue Cherub studio, where you rig an SVG drawing and animate it on a timeline, then export video or frames. Free, and you sign in to use it."></webui-data>
 
 <webui-restrict-to-role role="1">
     <template slot="valid">

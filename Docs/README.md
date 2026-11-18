@@ -1,6 +1,6 @@
 # Blue Cherub
 
-[Version: 0.1.28](https://github.com/StoicDreams/BlueCherub)
+[Version: 0.1.29](https://github.com/StoicDreams/BlueCherub)
 
 [WebUI](https://github.com/StoicDreams/WebUI)
 
