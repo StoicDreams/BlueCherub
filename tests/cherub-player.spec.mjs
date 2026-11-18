@@ -17,14 +17,17 @@ test.describe('app-cherub-player', () => {
     });
 
     test('the pause button stops the animation and play resumes it', async ({ page }) => {
+        // The test moves the clock itself, to show that time passing does not move a paused animation.
+        await page.clock.install();
         await openPage(page, '/');
         const player = page.locator('app-cherub-player');
         await expect(player).toHaveAttribute('loaded', '');
         await player.getByRole('button', { name: 'Pause animation' }).click();
-        expect(await player.evaluate(el => el.playing)).toBe(false);
+        await expect.poll(() => player.evaluate(el => el.playing)).toBe(false);
+        await expect(player.getByRole('button', { name: 'Play animation' })).toBeVisible();
         const paused = await player.evaluate(el => el.currentFrame);
-        await page.waitForTimeout(300);
-        expect(await player.evaluate(el => el.currentFrame)).toBe(paused);
+        await page.clock.runFor(2000);
+        await expect.poll(() => player.evaluate(el => el.currentFrame)).toBe(paused);
         await player.getByRole('button', { name: 'Play animation' }).click();
         await expect.poll(() => player.evaluate(el => el.currentFrame)).not.toBe(paused);
     });
@@ -34,8 +37,8 @@ test.describe('app-cherub-player', () => {
         await openPage(page, '/');
         const player = page.locator('app-cherub-player');
         await expect(player).toHaveAttribute('loaded', '');
-        expect(await player.evaluate(el => el.playing)).toBe(false);
-        expect(await player.evaluate(el => el.currentFrame)).toBe(0);
+        await expect.poll(() => player.evaluate(el => el.playing)).toBe(false);
+        await expect.poll(() => player.evaluate(el => el.currentFrame)).toBe(0);
         await expect(player.getByRole('button', { name: 'Play animation' })).toBeVisible();
     });
 
@@ -126,8 +129,8 @@ test.describe('app-cherub-player swaps', () => {
             const svg = el.svgElement;
             return ['eyes-open', 'eyes-closed'].map(id => svg.querySelector(`#${id}`).getAttribute('display') !== 'none');
         }, frame);
-        expect(await shown(0)).toEqual([true, false]);
-        expect(await shown(38)).toEqual([false, true]);
-        expect(await shown(40)).toEqual([true, false]);
+        await expect.poll(() => shown(0)).toEqual([true, false]);
+        await expect.poll(() => shown(38)).toEqual([false, true]);
+        await expect.poll(() => shown(40)).toEqual([true, false]);
     });
 });

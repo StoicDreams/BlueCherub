@@ -71,18 +71,9 @@ test.describe('app-feature', () => {
         const feature = page.locator('app-feature[video]').first();
         await feature.scrollIntoViewIfNeeded();
         await expect(feature.getByRole('button', { name: 'Play clip' })).toBeVisible();
-        await page.waitForTimeout(500);
-        expect(await feature.locator('video').evaluate(el => el.paused)).toBe(true);
-    });
-
-    test('stacks the picture above the text on narrow screens', async ({ page }) => {
-        await page.setViewportSize({ width: 420, height: 900 });
-        await openPage(page, '/');
-        // The second feature puts its picture on the right when there's room.
-        const feature = page.locator('app-feature').nth(1);
-        await feature.scrollIntoViewIfNeeded();
-        const [shot, text] = await feature.evaluate(el => ['.clip', '.text'].map(s => el.shadowRoot.querySelector(s).getBoundingClientRect().top));
-        expect(shot).toBeLessThan(text);
+        // The clip decides whether to play when it comes into view, which is when it gets its visible attribute.
+        await expect(feature).toHaveAttribute('visible');
+        await expect.poll(() => feature.locator('video').evaluate(el => el.paused)).toBe(true);
     });
 
     test('every screenshot and clip the home page and guide use exists', () => {

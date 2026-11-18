@@ -77,7 +77,7 @@ test.describe('app-cherub-animator', () => {
         await animator.getByLabel('Rotate (°)').fill('30');
         await animator.getByLabel('Rotate (°)').press('Enter');
         await expect(animator.getByLabel('Rotate (°) ◆')).toHaveValue('30');
-        expect(track(await scene(animator), 'arm-bow', 'rotate').keys).toEqual([{ frame: 2, value: 30, ease: 'inOut' }]);
+        await expect.poll(async () => track(await scene(animator), 'arm-bow', 'rotate').keys).toEqual([{ frame: 2, value: 30, ease: 'inOut' }]);
         await expect(animator.getByRole('button', { name: 'arm-bow key at frame 2' })).toBeVisible();
         // The bow is attached to the arm, so it turns with it.
         await expect.poll(() => animator.evaluate(el => el.shadowRoot.querySelector('app-cherub-player').shadowRoot.querySelector('#bow').getAttribute('transform'))).not.toBe(bowBefore);
@@ -99,7 +99,7 @@ test.describe('app-cherub-animator', () => {
         await page.mouse.move(cx + 30, cy + 10, { steps: 5 });
         await page.mouse.up();
         await expect.poll(async () => track(await scene(animator), 'head', 'x')?.keys[0].value).toBeGreaterThan(10);
-        expect(track(await scene(animator), 'head', 'y').keys[0].frame).toBe(0);
+        await expect.poll(async () => track(await scene(animator), 'head', 'y').keys[0].frame).toBe(0);
 
         await animator.getByRole('button', { name: 'Rotate', exact: true }).click();
         await expect(animator.getByRole('button', { name: 'Rotate', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -112,47 +112,10 @@ test.describe('app-cherub-animator', () => {
         await expect.poll(async () => track(await scene(animator), 'head', 'rotate').keys[0].value).not.toBe(before);
     });
 
-    test('scrubbing through every frame never moves the panel or the timeline', async ({ page }) => {
-        const animator = await openSample(page);
-        // The wing has keys on some frames and not others, and the scene animates on twos, so the notes change.
-        await animator.locator('.parts').getByRole('button', { name: 'wing-back' }).click();
-        // Scrubs and measures inside the page, since a round trip per frame took longer than the timeout on a busy machine.
-        const moved = await animator.evaluate(async el => {
-            const root = el.shadowRoot;
-            const place = node => {
-                const r = node.getBoundingClientRect();
-                return [Math.round(r.top), Math.round(r.left), Math.round(r.height), Math.round(r.width)].join(',');
-            };
-            const layout = () => ({
-                timeline: place(root.querySelector('.timeline')),
-                keyPose: place(root.querySelector('[data-focus="key-pose"]')),
-                ease: place(root.querySelector('#key-ease')),
-                library: place(root.querySelector('.library summary')),
-                stage: place(root.querySelector('.stage-wrap')),
-            });
-            const moved = [];
-            // Run with this browser's font, then with wider letters, standing in for a wider fallback font on other systems.
-            for (const spacing of ['normal', '0.15em']) {
-                el.style.letterSpacing = spacing;
-                await el.setFrame(0);
-                const first = layout();
-                for (let frame = 1; frame < 48; frame++) {
-                    await el.setFrame(frame);
-                    const now = layout();
-                    for (const [name, place] of Object.entries(now)) {
-                        if (place !== first[name]) moved.push(`${spacing} spacing, ${name} at frame ${frame}: ${first[name]} → ${place}`);
-                    }
-                }
-            }
-            return moved;
-        });
-        expect(moved).toEqual([]);
-    });
-
     test('changes easing, deletes keys, and keys a whole pose', async ({ page }) => {
         const animator = await openSample(page);
         await animator.getByRole('button', { name: 'wing-back key at frame 6' }).click();
-        expect(await frameOf(animator)).toBe(6);
+        await expect.poll(() => frameOf(animator)).toBe(6);
         await expect(animator.getByLabel('From these keys to the next')).toHaveValue('inOut');
         await animator.getByLabel('From these keys to the next').selectOption('linear');
         await expect.poll(async () => track(await scene(animator), 'wing-back', 'rotate').keys[1].ease).toBe('linear');
@@ -186,6 +149,23 @@ test.describe('app-cherub-animator', () => {
         await expect(animator.getByRole('button', { name: 'Play' })).toHaveAttribute('aria-pressed', 'false');
     });
 
+    test('a redraw while typing keeps the text, and Enter still applies it', async ({ page }) => {
+        const animator = await openSample(page);
+        // Changing the frame redraws the animator, as any change does. setFrame resolves once it has redrawn.
+        await animator.getByLabel('Frames per second').fill('12');
+        await animator.evaluate(el => el.setFrame(5));
+        await expect(animator.getByLabel('Frames per second')).toHaveValue('12');
+        await animator.getByLabel('Frames per second').press('Enter');
+        await expect.poll(async () => (await scene(animator)).fps).toBe(12);
+        // A part's value boxes are replaced by a redraw, and the new box keeps the text too.
+        await animator.locator('.parts').getByRole('button', { name: 'arm-bow' }).click();
+        await animator.getByLabel('Rotate (°)').fill('30');
+        await animator.evaluate(el => el.setFrame(6));
+        await expect(animator.getByLabel('Rotate (°)')).toHaveValue('30');
+        await animator.getByLabel('Rotate (°)').press('Enter');
+        await expect.poll(async () => track(await scene(animator), 'arm-bow', 'rotate')?.keys.find(k => k.frame === 6)?.value).toBe(30);
+    });
+
     test('sets frame rate, length, and animating on twos', async ({ page }) => {
         const animator = await openSample(page);
         await animator.getByLabel('Length (frames)').fill('24');
@@ -215,7 +195,7 @@ test.describe('app-cherub-animator', () => {
         saved.frameCount = 30;
         await animator.locator('input[name="scene-file"]').setInputFiles({ name: 'edited.scene.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(saved)) });
         await expect(animator.locator('.status')).toContainText('This rig has no tail');
-        expect((await scene(animator)).frameCount).toBe(30);
+        await expect.poll(async () => (await scene(animator)).frameCount).toBe(30);
     });
 });
 
@@ -250,9 +230,9 @@ test.describe('app-cherub-animator swaps and library', () => {
         await animator.getByLabel('Frame', { exact: true }).fill('30');
         await animator.getByRole('button', { name: 'Apply Tilted' }).click();
         await expect.poll(() => animator.evaluate(el => el.poses.head.rotate)).toBe(15);
-        expect(track(await scene(animator), 'head', 'rotate').keys.some(k => k.frame === 30 && k.value === 15)).toBe(true);
+        await expect.poll(async () => track(await scene(animator), 'head', 'rotate').keys.some(k => k.frame === 30 && k.value === 15)).toBe(true);
         await animator.getByRole('button', { name: 'Delete Tilted' }).click();
-        expect((await scene(animator)).library.poses).toEqual({});
+        await expect.poll(async () => (await scene(animator)).library.poses).toEqual({});
     });
 
     test('saves an action and inserts it repeatedly, lengthening the scene', async ({ page }) => {

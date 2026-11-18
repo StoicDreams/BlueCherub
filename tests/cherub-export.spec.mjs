@@ -101,14 +101,20 @@ test.describe('app-cherub-export', () => {
         await expect(exporter.locator('.export-status')).toContainText('Exported blue-cherub-frames.zip (360 × 360, 48 frames)');
     });
 
-    test('exports an H.264 MP4 that plays', async ({ page }) => {
+    test('exports an H.264 MP4 that plays, or says why this browser cannot make one', async ({ page }) => {
         test.setTimeout(90000);
         const exporter = await openExport(page);
-        // Some browser builds can't encode H.264. There the export explains why, which another test covers.
+        await exporter.getByLabel('Size').selectOption('360');
+        // Some browser builds can't encode H.264, such as the Chromium on GitHub's runners. There the export must say so
+        // rather than fail or hang, so the test checks whichever of the two this browser does.
         const canEncode = await page.evaluate(async () => typeof VideoEncoder === 'function'
             && (await VideoEncoder.isConfigSupported({ codec: 'avc1.640028', width: 360, height: 360, bitrate: 1e6, framerate: 24 })).supported);
-        test.skip(!canEncode, 'This browser build cannot encode H.264 video');
-        await exporter.getByLabel('Size').selectOption('360');
+        if (!canEncode) {
+            await exporter.getByRole('button', { name: 'Export' }).click();
+            await expect(exporter.locator('.export-status')).toContainText('cannot');
+            await expect(exporter.getByRole('button', { name: 'Export' })).toBeEnabled();
+            return;
+        }
         const { name, bytes } = await downloadBytes(page, () => exporter.getByRole('button', { name: 'Export' }).click());
         expect(name).toBe('blue-cherub.mp4');
         const { top, find } = mp4Boxes(bytes);

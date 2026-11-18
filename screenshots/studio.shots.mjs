@@ -10,6 +10,67 @@ import { join } from 'node:path';
 // (webapp/root_files/guide/studio-guide.md) together. See claude/bluecherub/CLAUDE.md.
 export const STUDIO_SHOTS = join(ROOT_FILES, 'img', 'screenshots', 'studio');
 
+/**
+ * Waits for everything that changes a picture: fonts, icons, images, and fades. Nothing here waits for an amount of time.
+ * The same steps as pictureReady in pages.shots.mjs, which does not export it.
+ */
+async function pictureReady(page) {
+    await page.evaluate(async () => {
+        const all = (root, found = []) => {
+            for (const el of root.querySelectorAll('*')) {
+                found.push(el);
+                if (el.shadowRoot) all(el.shadowRoot, found);
+            }
+            return found;
+        };
+        const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+        const elements = all(document);
+        await document.fonts.ready;
+        // Icons draw themselves once their definition has downloaded. This asks for the same cached download each
+        // icon is waiting on, so when it answers, and a frame has passed, every icon has been given its drawing.
+        const icons = new Set(elements.filter(el => el.localName === 'webui-icon' && el._iconRequest).map(el => el._iconRequest));
+        await Promise.all([...icons].map(name => webui.fetchWithCache(`${webui.cdnRoot}icons/${name}.webui`).catch(() => { })));
+        // An image that is out of view and loads lazily has not started, and will not until it is scrolled to.
+        const images = elements.filter(el => el.localName === 'img' && el.currentSrc && !(el.loading === 'lazy' && !el.complete));
+        await Promise.all(images.map(img => img.complete ? null : new Promise(resolve => {
+            img.addEventListener('load', resolve, { once: true });
+            img.addEventListener('error', resolve, { once: true });
+        })));
+        // A broken image rejects decode, and still shows the same every time.
+        await Promise.all(images.map(img => img.decode().catch(() => { })));
+        // Transitions start when the browser next works out styles, so let two frames pass before looking for them.
+        await frame();
+        await frame();
+        // Fades, icon morphs, and other transitions that end. A looping animation never finishes, so it is left running.
+        // document.getAnimations leaves out shadow roots, where the components keep theirs, so each root is asked.
+        const roots = () => [document, ...all(document).map(el => el.shadowRoot).filter(Boolean)];
+        const ending = () => roots().flatMap(root => root.getAnimations()).filter(animation => animation.playState === 'running'
+            && Number.isFinite(animation.effect?.getComputedTiming().endTime));
+        for (let running = ending(); running.length; running = ending()) {
+            await Promise.all(running.map(animation => animation.finished.catch(() => { })));
+        }
+        await document.fonts.ready;
+        // Two frames, so the browser has painted the finished page before the picture is taken.
+        await frame();
+        await frame();
+    });
+}
+
+/**
+ * A picture of a page or an element once it has stopped changing: it is taken again until two in a row are the same.
+ * The browser redraws text more sharply a few frames after a fade ends, and nothing says when it has, so this is how
+ * the picture comes out the same on every run without waiting for an amount of time.
+ */
+async function stillPicture(target, options = {}) {
+    let last = await target.screenshot(options);
+    for (let tries = 0; tries < 30; tries++) {
+        const next = await target.screenshot(options);
+        if (next.equals(last)) return next;
+        last = next;
+    }
+    throw new Error('The picture never stopped changing, so something on the page is still moving.');
+}
+
 test('screenshots of the studio at each stage', async ({ page }) => {
     test.setTimeout(120000);
     await page.clock.setFixedTime(new Date('2026-11-02T15:00:00Z'));
@@ -38,11 +99,10 @@ test('screenshots of the studio at each stage', async ({ page }) => {
         const box = await studio.boundingBox();
         const height = Math.ceil(box.y + box.height + 60);
         if (height > page.viewportSize().height) await page.setViewportSize({ width: 1280, height });
-        // Keep hover effects out of the picture, and let fonts and drawing settle.
+        // Keep hover effects out of the picture, then wait for fonts, icons, and fades to finish.
         await page.mouse.move(640, page.viewportSize().height - 4);
-        await page.evaluate(() => document.fonts.ready);
-        await page.waitForTimeout(300);
-        await studio.screenshot({ path: join(STUDIO_SHOTS, `${name}.png`) });
+        await pictureReady(page);
+        writeFileSync(join(STUDIO_SHOTS, `${name}.png`), await stillPicture(studio));
     };
 
     // Rig: the sample with a group selected in the layers.
@@ -106,7 +166,13 @@ const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
 
 /** Collects frames of one area of the page, then writes them as an MP4. */
 async function recorder(page, locator, name, fps = 12) {
-    const box = await locator.boundingBox();
+    let box = await locator.boundingBox();
+    // Grow the window when the area doesn't fit, as the stills do, so a frame is never cut off at the bottom.
+    const needed = Math.ceil(box.y + box.height + 20);
+    if (needed > page.viewportSize().height) {
+        await page.setViewportSize({ width: page.viewportSize().width, height: needed });
+        box = await locator.boundingBox();
+    }
     const clip = { x: Math.floor(box.x), y: Math.floor(box.y), width: Math.floor(box.width / 2) * 2, height: Math.floor(box.height / 2) * 2 };
     const dir = mkdtempSync(join(tmpdir(), `cherub-${name}-`));
     // Park the mouse out of the way, so hover effects stay out of the clip.
@@ -207,25 +273,31 @@ test('clips of the studio in use', async ({ page }) => {
     rec = await recorder(page, animator, 'animate-pose', 12);
     await rec.snap();
     rec.hold(4);
-    const drag = async (from, to, steps) => {
+    // Each step of a drag is drawn after the worker works out the new pose, so wait for the head to be drawn in its new
+    // place before taking the frame. Letting go reads the pose again, and the animator shows it once that is done.
+    const drawn = () => animator.locator('app-cherub-player').locator('[id="head"]').getAttribute('transform');
+    const keyed = property => animator.evaluate((el, property) => el.sceneData.tracks.find(tr => tr.part === 'head' && tr.property === property)?.keys.find(key => key.frame === 12)?.value, property);
+    const posed = property => animator.evaluate((el, property) => el.poses.head?.[property], property);
+    const drag = async (from, to, steps, property) => {
         await page.mouse.move(from[0], from[1]);
         await page.mouse.down();
         for (let i = 1; i <= steps; i++) {
+            const before = await drawn();
             await page.mouse.move(from[0] + (to[0] - from[0]) * i / steps, from[1] + (to[1] - from[1]) * i / steps);
-            await page.waitForTimeout(30);
+            await expect.poll(drawn).not.toBe(before);
             await rec.snap();
         }
         await page.mouse.up();
-        await page.waitForTimeout(100);
+        await expect.poll(async () => (await posed(property)) === (await keyed(property))).toBe(true);
         await rec.snap();
         rec.hold(5);
     };
-    await drag([cx, cy], [cx + 40, cy - 15], 10);
+    await drag([cx, cy], [cx + 40, cy - 15], 10, 'x');
     await animator.getByRole('button', { name: 'Rotate', exact: true }).click();
     await rec.snap();
     rec.hold(3);
     // Press on the moved head, below its middle, and swing it around the neck.
-    await drag([cx + 40, cy + 20], [cx + 100, cy + 20], 12);
+    await drag([cx + 40, cy + 20], [cx + 100, cy + 20], 12, 'rotate');
     rec.finish();
 
     // Library: save the wing's flap as an action, insert it three times, and play the result.

@@ -214,8 +214,12 @@
             t._dirty = false;
             t._poseToken = 0;
             t._slider.addEventListener('input', () => t.setFrame(parseInt(t._slider.value)));
-            t._fps.addEventListener('change', () => t.setTiming({ fps: parseInt(t._fps.value) }));
-            t._length.addEventListener('change', () => t.setTiming({ frameCount: parseInt(t._length.value) }));
+            // A redraw follows work in the worker, so it can come while someone is typing in another box. _typing is the
+            // box holding text that has not been applied yet (change is when a box applies its text), and a redraw keeps it.
+            t._typing = null;
+            [t._fps, t._length].forEach(input => input.addEventListener('input', () => { t._typing = input; }));
+            t._fps.addEventListener('change', () => { t._typing = null; t.setTiming({ fps: parseInt(t._fps.value) }); });
+            t._length.addEventListener('change', () => { t._typing = null; t.setTiming({ frameCount: parseInt(t._length.value) }); });
             t._twos.addEventListener('change', () => t.setTiming({ holdFrames: t._twos.checked ? 2 : 1 }));
             t._openInput.addEventListener('change', () => t._openFromInput());
             t._player.addEventListener('framechange', ev => t._onPlayerFrame(ev.detail.frame));
@@ -810,8 +814,12 @@
             t._buttons.play.setAttribute('aria-pressed', playing ? 'true' : 'false');
             t._toolButtons.forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t._tool ? 'true' : 'false'));
             if (!has) return;
-            t._fps.value = t._scene.fps;
-            t._length.value = t._scene.frameCount;
+            // Text being typed in a box, and not applied yet, is kept. See _typing in the constructor.
+            const typing = t._typing && t._typing.isConnected ? t._typing : null;
+            const typed = typing && typing.id && t._typingPart === t._part ? { id: typing.id, value: typing.value } : null;
+            t._typing = typing === t._fps || typing === t._length ? typing : null;
+            if (typing !== t._fps) t._fps.value = t._scene.fps;
+            if (typing !== t._length) t._length.value = t._scene.frameCount;
             t._twos.checked = t._scene.holdFrames === 2;
             t._slider.max = t._scene.frameCount - 1;
             t._slider.value = t._frame;
@@ -821,6 +829,13 @@
             const focusKey = active && (active.dataset.focus || active.id);
             t._renderParts();
             t._renderPanel();
+            if (typed) {
+                const box = t._panel.querySelector(`input[id="${CSS.escape(typed.id)}"]`);
+                if (box) {
+                    box.value = typed.value;
+                    t._typing = box;
+                }
+            }
             t._renderLibrary();
             t._describeExport();
             t._renderLanes();
@@ -854,7 +869,17 @@
             const fields = PROPERTIES.map(p => {
                 const id = `value-${p.name}`;
                 const input = el('input', { type: 'number', id, step: p.step, min: p.min, max: p.max, value: pose[p.name] === undefined ? '' : round(pose[p.name], 3) });
-                input.addEventListener('change', () => t.setValue(part, p.name, parseFloat(input.value)));
+                const apply = () => {
+                    if (t._typing !== input) return;
+                    t._typing = null;
+                    t.setValue(part, p.name, parseFloat(input.value));
+                };
+                input.addEventListener('input', () => { t._typing = input; t._typingPart = part; });
+                // A box put back by a redraw holds text the browser did not see typed, so it sends no change. Enter and
+                // leaving the box apply the text as well, and only text that is still waiting is applied.
+                input.addEventListener('change', apply);
+                input.addEventListener('blur', apply);
+                input.addEventListener('keydown', ev => { if (ev.key === 'Enter') apply(); });
                 return el('div', { class: keyed.has(p.name) ? 'field keyed' : 'field' }, [
                     el('label', { for: id, text: keyed.has(p.name) ? `${p.label} ◆` : p.label }),
                     input,

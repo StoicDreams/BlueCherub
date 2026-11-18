@@ -26,7 +26,10 @@ async function importSvg(rigger, text, name = 'messy.svg') {
     await expect(rigger.locator('.status')).toContainText(`Loaded ${name}`);
 }
 
-/** Where each element is drawn on the page, to check that edits keep the drawing the same. */
+/**
+ * Where each element is drawn on the page, to check that edits keep the drawing the same. The drawing is what this tool
+ * makes, so its positions are its output, not styling, and tests check them.
+ */
 function boxes(rigger, ids) {
     return rigger.evaluate((el, ids) => ids.map(id => {
         const box = el.shadowRoot.querySelector(`.stage [id="${id}"]`).getBoundingClientRect();
@@ -49,7 +52,7 @@ test.describe('app-cherub-rigger', () => {
         expect(svg).toContain('viewBox="0 0 200 100"');
         expect(svg).toContain('id="bc-1"');
         expect(svg).toContain('id="bc-1-0"');
-        expect(await page.evaluate(() => window.ranImportedScript)).toBeUndefined();
+        await expect.poll(() => page.evaluate(() => window.ranImportedScript)).toBeUndefined();
         // The layers show the drawing tool's label rather than the generated id.
         const layers = rigger.locator('app-cherub-layers');
         await expect(layers.getByRole('button', { name: /Right arm/ })).toBeVisible();
@@ -65,22 +68,22 @@ test.describe('app-cherub-rigger', () => {
         await layers.getByRole('button', { name: /bc-2-0-0/ }).click({ modifiers: ['Shift'] });
         await rigger.getByRole('button', { name: 'Group', exact: true }).click();
         await expect(rigger.locator('.status')).toContainText('Grouped 2 elements as group');
-        expect(await rigger.evaluate(el => el.selection)).toEqual(['group']);
+        await expect.poll(() => rigger.evaluate(el => el.selection)).toEqual(['group']);
         // Both shapes now sit in the new group, drawn where they were.
-        expect(await rigger.evaluate(el => [...el.shadowRoot.querySelectorAll('.stage #group > *')].map(e => e.id))).toEqual(['bc-1-0', 'bc-2-0-0']);
-        expect(await boxes(rigger, ['bc-1-0', 'bc-1-1', 'bc-2-0-0'])).toEqual(before);
+        await expect.poll(() => rigger.evaluate(el => [...el.shadowRoot.querySelectorAll('.stage #group > *')].map(e => e.id))).toEqual(['bc-1-0', 'bc-2-0-0']);
+        await expect.poll(() => boxes(rigger, ['bc-1-0', 'bc-1-1', 'bc-2-0-0'])).toEqual(before);
 
         await rigger.getByRole('button', { name: 'Ungroup' }).click();
-        expect(await rigger.evaluate(el => el.shadowRoot.querySelector('.stage #group'))).toBeNull();
-        expect(await boxes(rigger, ['bc-1-0', 'bc-2-0-0'])).toEqual([before[0], before[2]]);
+        await expect.poll(() => rigger.evaluate(el => !!el.shadowRoot.querySelector('.stage #group'))).toBe(false);
+        await expect.poll(() => boxes(rigger, ['bc-1-0', 'bc-2-0-0'])).toEqual([before[0], before[2]]);
 
         await rigger.getByRole('button', { name: 'Undo' }).click();
-        expect(await rigger.evaluate(el => !!el.shadowRoot.querySelector('.stage #group'))).toBe(true);
+        await expect.poll(() => rigger.evaluate(el => !!el.shadowRoot.querySelector('.stage #group'))).toBe(true);
         await rigger.getByRole('button', { name: 'Undo' }).click();
-        expect(await rigger.evaluate(el => !!el.shadowRoot.querySelector('.stage #group'))).toBe(false);
-        expect(await rigger.evaluate(el => el.shadowRoot.querySelector('.stage [id="bc-1-0"]').parentElement.id)).toBe('bc-1');
+        await expect.poll(() => rigger.evaluate(el => !!el.shadowRoot.querySelector('.stage #group'))).toBe(false);
+        await expect.poll(() => rigger.evaluate(el => el.shadowRoot.querySelector('.stage [id="bc-1-0"]').parentElement.id)).toBe('bc-1');
         await rigger.getByRole('button', { name: 'Redo' }).click();
-        expect(await rigger.evaluate(el => !!el.shadowRoot.querySelector('.stage #group'))).toBe(true);
+        await expect.poll(() => rigger.evaluate(el => !!el.shadowRoot.querySelector('.stage #group'))).toBe(true);
     });
 
     test('ungrouping keeps the group\'s fill on its children', async ({ page }) => {
@@ -88,8 +91,8 @@ test.describe('app-cherub-rigger', () => {
         await importSvg(rigger, messySvg);
         await rigger.locator('app-cherub-layers').getByRole('button', { name: /^bc-1\s*Group/ }).click();
         await rigger.getByRole('button', { name: 'Ungroup' }).click();
-        const fills = await rigger.evaluate(el => ['bc-1-0', 'bc-1-2'].map(id => el.shadowRoot.querySelector(`.stage [id="${id}"]`).getAttribute('fill')));
-        expect(fills).toEqual(['#2f7fe8', 'url(#shine)']);
+        await expect.poll(() => rigger.evaluate(el => ['bc-1-0', 'bc-1-2'].map(id => el.shadowRoot.querySelector(`.stage [id="${id}"]`).getAttribute('fill'))))
+            .toEqual(['#2f7fe8', 'url(#shine)']);
     });
 
     test('clean up removes groups that do nothing', async ({ page }) => {
@@ -98,8 +101,8 @@ test.describe('app-cherub-rigger', () => {
         const before = await boxes(rigger, ['bc-2-0-0']);
         await rigger.getByRole('button', { name: 'Clean up groups' }).click();
         await expect(rigger.locator('.status')).toContainText('Removed 2 groups');
-        expect(await rigger.evaluate(el => el.shadowRoot.querySelector('.stage [id="bc-2-0-0"]').parentElement.localName)).toBe('svg');
-        expect(await boxes(rigger, ['bc-2-0-0'])).toEqual(before);
+        await expect.poll(() => rigger.evaluate(el => el.shadowRoot.querySelector('.stage [id="bc-2-0-0"]').parentElement.localName)).toBe('svg');
+        await expect.poll(() => boxes(rigger, ['bc-2-0-0'])).toEqual(before);
     });
 
     test('renames an element and keeps references to it working', async ({ page }) => {
@@ -129,11 +132,11 @@ test.describe('app-cherub-rigger', () => {
         await layers.getByRole('button', { name: /Right arm/ }).click();
         await rigger.getByRole('button', { name: 'Make this a part' }).click();
         // The suggested pivot is the middle of the shape, in root coordinates (the group is moved by 20, 10).
-        expect(await rigger.evaluate(el => el.rigData.parts['bc-1-1'].pivot)).toEqual([100, 30]);
+        await expect.poll(() => rigger.evaluate(el => el.rigData.parts['bc-1-1'].pivot)).toEqual([100, 30]);
         await rigger.getByLabel('Attached to').selectOption('bc-1');
         await rigger.getByLabel('X').fill('82');
         await rigger.getByLabel('X').press('Tab');
-        expect(await rigger.evaluate(el => el.rigData.parts['bc-1-1'])).toEqual({ pivot: [82, 30], parent: 'bc-1' });
+        await expect.poll(() => rigger.evaluate(el => el.rigData.parts['bc-1-1'])).toEqual({ pivot: [82, 30], parent: 'bc-1' });
         await layers.getByRole('button', { name: /Part/ }).first().click();
         // bc-1 can't be attached to its own child.
         await expect(rigger.getByLabel('Attached to').locator('option')).toHaveText(['None']);
@@ -181,7 +184,7 @@ test.describe('app-cherub-rigger', () => {
             { name: 'my-character.rig.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(rig)) },
         ]);
         await expect(rigger.locator('.status')).toContainText("ghost isn't in the SVG");
-        expect(await rigger.evaluate(el => Object.keys(el.rigData.parts))).toEqual(['bc-1-1']);
+        await expect.poll(() => rigger.evaluate(el => Object.keys(el.rigData.parts))).toEqual(['bc-1-1']);
     });
 
     test('loads the Blue Cherub sample with its parts', async ({ page }) => {
@@ -191,10 +194,10 @@ test.describe('app-cherub-rigger', () => {
         await expect(rigger.locator('app-cherub-layers').getByRole('button', { name: /Part/ })).toHaveCount(10);
         // Selecting on the drawing selects the shape that was clicked.
         await rigger.locator('.stage [id="arm-bow"]').click({ force: true });
-        expect(await rigger.evaluate(el => el.selection)).toEqual(['arm-bow']);
+        await expect.poll(() => rigger.evaluate(el => el.selection)).toEqual(['arm-bow']);
         await expect(rigger.getByLabel('Attached to')).toHaveValue('body');
         await page.keyboard.press('Escape');
-        expect(await rigger.evaluate(el => el.selection)).toEqual([]);
+        await expect.poll(() => rigger.evaluate(el => el.selection)).toEqual([]);
     });
 });
 
@@ -224,26 +227,31 @@ test.describe('app-cherub-rigger swaps', () => {
         await rigger.locator('app-cherub-layers').getByRole('button', { name: /^face\s*Group/ }).click();
         await rigger.getByRole('button', { name: 'Make this a part' }).click();
         await rigger.getByRole('button', { name: 'Use its groups as swaps' }).click();
-        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['happy', 'sad', 'shock']);
-        const displays = () => rigger.evaluate(el => ['happy', 'sad', 'shock'].map(id => getComputedStyle(el.shadowRoot.querySelector(`.stage #${id}`)).display));
-        expect(await displays()).toEqual(['inline', 'none', 'none']);
+        await expect.poll(() => rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['happy', 'sad', 'shock']);
+        // Which drawings show on the stage, checked as a person sees them.
+        const drawing = id => rigger.locator(`.stage #${id}`);
+        await expect(drawing('happy')).toBeVisible();
+        await expect(drawing('sad')).toBeHidden();
+        await expect(drawing('shock')).toBeHidden();
         await rigger.getByRole('button', { name: 'Use shock at rest' }).click();
-        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'happy', 'sad']);
+        await expect.poll(() => rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'happy', 'sad']);
         await rigger.getByRole('button', { name: 'Remove sad from swaps' }).click();
-        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'happy']);
+        await expect.poll(() => rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'happy']);
         // Selecting a drawing shows it, so it can be checked and edited.
         await rigger.getByRole('button', { name: 'Show happy' }).click();
-        expect(await displays()).toEqual(['inline', 'inline', 'none']);
+        await expect(drawing('happy')).toBeVisible();
+        await expect(drawing('sad')).toBeVisible();
+        await expect(drawing('shock')).toBeHidden();
         // Swaps stay in the SVG output untouched: hiding is only on the stage.
-        expect(await rigger.evaluate(el => el.svgText)).not.toContain('display');
+        await expect.poll(() => rigger.evaluate(el => el.svgText)).not.toContain('display');
         // Renaming a drawing keeps the swap list in step.
         await rigger.getByLabel('Name').fill('grin');
         await rigger.getByLabel('Name').press('Enter');
-        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'grin']);
+        await expect.poll(() => rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'grin']);
         await rigger.locator('app-cherub-layers').getByRole('button', { name: /^face\s*Group/ }).click();
         await rigger.getByRole('button', { name: 'Stop swapping' }).click();
-        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toBeUndefined();
+        await expect.poll(() => rigger.evaluate(el => el.rigData.parts.face.swaps)).toBeUndefined();
         await rigger.getByRole('button', { name: 'Undo' }).click();
-        expect(await rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'grin']);
+        await expect.poll(() => rigger.evaluate(el => el.rigData.parts.face.swaps)).toEqual(['shock', 'grin']);
     });
 });
