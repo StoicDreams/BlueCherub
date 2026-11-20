@@ -1,4 +1,4 @@
-import { test, expect, openPage, signIn, expectSignedIn } from './support/site.mjs';
+import { test, expect, openPage, signIn, expectSignedIn } from '../support/site.mjs';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -81,7 +81,6 @@ test.describe('app-cherub-export', () => {
     });
 
     test('exports every frame as a transparent PNG in a zip', async ({ page }) => {
-        test.setTimeout(90000);
         const exporter = await openExport(page);
         await exporter.getByLabel('Format').selectOption('png');
         await exporter.getByLabel('Size').selectOption('360');
@@ -102,7 +101,6 @@ test.describe('app-cherub-export', () => {
     });
 
     test('exports an H.264 MP4 that plays, or says why this browser cannot make one', async ({ page }) => {
-        test.setTimeout(90000);
         const exporter = await openExport(page);
         await exporter.getByLabel('Size').selectOption('360');
         // Some browser builds can't encode H.264, such as the Chromium on GitHub's runners. There the export must say so
