@@ -38,6 +38,34 @@ function boxes(rigger, ids) {
 }
 
 test.describe('app-cherub-rigger', () => {
+    test('keeps a drawing\'s labels in what it saves, without showing them as tooltips on the stage', async ({ page }) => {
+        const rigger = await openStudio(page);
+        await importSvg(rigger, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-label="My art">
+  <title>A box</title>
+  <rect id="box" title="The box" aria-label="Box" width="60" height="60"/>
+</svg>`, 'labels.svg');
+        // Saved and copied text has every label, in place.
+        await expect.poll(() => rigger.evaluate(el => el.svgText)).toContain('aria-label="My art"');
+        const saved = await rigger.evaluate(el => el.svgText);
+        expect(saved).toContain('<title>A box</title>');
+        expect(saved).toContain('title="The box"');
+        expect(saved).toContain('aria-label="Box"');
+        expect(saved).not.toContain('data-cherub');
+        // Over the stage, the framework finds no label to show. The header's feedback button opening a tooltip first shows
+        // the framework's tooltips are working on this page.
+        const tooltip = page.locator('body > .tooltip');
+        await page.getByRole('button', { name: 'Provide us your feedback' }).hover();
+        await expect(tooltip).toHaveClass(/\bopen\b/);
+        await rigger.locator('.stage [id="box"]').hover();
+        await expect(tooltip).toHaveClass(/\bclosed\b/);
+        // Undo restores the drawing with its labels too.
+        await rigger.locator('app-cherub-layers').getByRole('button', { name: /^box/ }).click();
+        await rigger.getByRole('button', { name: 'Make this a part' }).click();
+        await rigger.getByRole('button', { name: 'Undo' }).click();
+        await expect.poll(() => rigger.evaluate(el => Object.keys(el.rigData.parts))).toEqual([]);
+        expect(await rigger.evaluate(el => el.svgText)).toContain('title="The box"');
+    });
+
 
     test('groups and ungroups shapes without moving them, and undoes it', async ({ page }) => {
         const rigger = await openStudio(page);

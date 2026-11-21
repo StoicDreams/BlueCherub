@@ -157,6 +157,8 @@
         constructor() {
             const t = this;
             t._stage = t.template.querySelector('.stage');
+            // Named with aria-labelledby, not aria-label, so the name reaches screen readers without a tooltip over the drawing.
+            t._name = t.template.querySelector('#stage-name');
             t._toggle = t.template.querySelector('button');
             t._loadToken = 0;
             t._playing = false;
@@ -180,7 +182,7 @@
                     t._load(value);
                     break;
                 case 'label':
-                    t._stage.setAttribute('aria-label', value || 'Animation');
+                    t._name.innerText = value || 'Animation';
                     break;
                 case 'maxWidth':
                     t.style.maxWidth = webui.pxIfNumber(value);
@@ -195,7 +197,7 @@
         },
         connected() {
             const t = this;
-            if (!t._stage.hasAttribute('aria-label')) t._stage.setAttribute('aria-label', t.getAttribute('label') || 'Animation');
+            if (!t._name.innerText) t._name.innerText = t.getAttribute('label') || 'Animation';
         },
         disconnected() {
             this._stopLoop();
@@ -392,6 +394,11 @@
                 t._domParents = domParents;
                 const viewBox = (svg.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
                 t._stage.style.aspectRatio = viewBox.length === 4 && viewBox[2] > 0 && viewBox[3] > 0 ? `${viewBox[2]} / ${viewBox[3]}` : '';
+                // The stage names the picture, so the drawing's own labels are dropped from this copy. The framework shows
+                // a tooltip for any element with an aria-label or title, and browsers show SVG <title> elements as one, so
+                // they would pop up over the drawing whenever the pointer is on it, such as while dragging a part.
+                for (const el of [svg, ...svg.querySelectorAll('*')]) ['aria-label', 'aria-labelledby', 'title'].forEach(name => el.removeAttribute(name));
+                svg.querySelectorAll('title').forEach(title => title.remove());
                 t._stage.replaceChildren(svg);
                 t.showFrame(0);
                 t.setAttribute('loaded', '');
@@ -410,7 +417,8 @@
             return { ok: true };
         },
         shadowTemplate: `
-<div class="stage" role="img"></div>
+<div class="stage" role="img" aria-labelledby="stage-name"></div>
+<span id="stage-name" hidden></span>
 <button type="button" hidden></button>
 <style type="text/css">
 :host {

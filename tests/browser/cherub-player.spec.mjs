@@ -12,8 +12,21 @@ test.describe('app-cherub-player', () => {
         // The frame keeps moving while it plays.
         const first = await player.evaluate(el => el.currentFrame);
         await expect.poll(() => player.evaluate(el => el.currentFrame)).not.toBe(first);
-        await expect(player.locator('.stage')).toHaveAttribute('role', 'img');
-        await expect(player.locator('.stage')).toHaveAttribute('aria-label', /Blue Cherub/);
+        await expect(player.getByRole('img', { name: /Blue Cherub floating in place/ })).toBeVisible();
+    });
+
+    test('hovering the drawing shows no tooltip, while its play button keeps one', async ({ page }) => {
+        await openPage(page, '/');
+        const player = page.locator('app-cherub-player');
+        await expect(player).toHaveAttribute('loaded', '');
+        const tooltip = page.locator('body > .tooltip');
+        // The button's tooltip opening shows the framework's tooltips are working on this page.
+        await player.getByRole('button', { name: 'Pause animation' }).hover();
+        await expect(tooltip).toHaveClass(/\bopen\b/);
+        await expect(tooltip).toHaveText('Pause animation');
+        // Over the drawing, the framework finds no label to show, so it closes the tooltip.
+        await player.locator('.stage').hover();
+        await expect(tooltip).toHaveClass(/\bclosed\b/);
     });
 
     test('the pause button stops the animation and play resumes it', async ({ page }) => {

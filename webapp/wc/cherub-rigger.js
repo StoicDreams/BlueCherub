@@ -121,6 +121,45 @@
         return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
+    // The framework shows a tooltip for any element with an aria-label or title, and browsers show SVG <title> elements
+    // as one, so a drawing's own labels would pop up over the stage while picking shapes or dragging pivots. While the
+    // drawing is on the stage they are kept under other names, and everything saved or copied puts them back.
+    const LABEL_ATTRIBUTES = [['aria-label', 'data-cherub-aria-label'], ['title', 'data-cherub-title']];
+
+    function hideLabels(svg) {
+        for (const el of [svg, ...svg.querySelectorAll('*')]) {
+            for (const [name, kept] of LABEL_ATTRIBUTES) {
+                if (!el.hasAttribute(name)) continue;
+                el.setAttribute(kept, el.getAttribute(name));
+                el.removeAttribute(name);
+            }
+        }
+        svg.querySelectorAll('title').forEach(title => {
+            const kept = document.createElementNS(SVG_NS, 'desc');
+            kept.setAttribute('data-cherub-title-element', '');
+            kept.textContent = title.textContent;
+            title.replaceWith(kept);
+        });
+    }
+
+    /** The drawing as text, with its labels back in place. */
+    function labelledText(svg) {
+        const copy = svg.cloneNode(true);
+        for (const el of [copy, ...copy.querySelectorAll('*')]) {
+            for (const [name, kept] of LABEL_ATTRIBUTES) {
+                if (!el.hasAttribute(kept)) continue;
+                el.setAttribute(name, el.getAttribute(kept));
+                el.removeAttribute(kept);
+            }
+        }
+        copy.querySelectorAll('desc[data-cherub-title-element]').forEach(kept => {
+            const title = document.createElementNS(SVG_NS, 'title');
+            title.textContent = kept.textContent;
+            kept.replaceWith(title);
+        });
+        return new XMLSerializer().serializeToString(copy);
+    }
+
     function round(value) {
         return Math.round(value * 100) / 100;
     }
@@ -214,7 +253,7 @@
             },
             /** The rigged SVG as text. */
             svgText: {
-                get() { return this._svg ? new XMLSerializer().serializeToString(this._svg) : ''; }
+                get() { return this._svg ? labelledText(this._svg) : ''; }
             },
             /** The ids of the selected elements. */
             selection: {
@@ -337,6 +376,7 @@
         },
         _setSvg(svg) {
             const t = this;
+            hideLabels(svg);
             t._svg = svg;
             svg.removeAttribute('width');
             svg.removeAttribute('height');
@@ -356,7 +396,7 @@
         // ----- Undo -----
         _snapshot() {
             const t = this;
-            return { svg: new XMLSerializer().serializeToString(t._svg), rig: JSON.stringify(t._rig), selection: [...t._selection] };
+            return { svg: labelledText(t._svg), rig: JSON.stringify(t._rig), selection: [...t._selection] };
         },
         /** Save the state before a change, so it can be undone. */
         _checkpoint() {

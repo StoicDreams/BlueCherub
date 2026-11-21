@@ -26,6 +26,10 @@
             t._img = t.template.querySelector('img');
             t._clip = t.template.querySelector('.clip');
             t._video = t.template.querySelector('video');
+            // The link and clip are named with aria-labelledby, not aria-label, because the framework shows a tooltip for
+            // any aria-label, which would cover the picture with its long description whenever the pointer is on it.
+            t._linkName = t.template.querySelector('#link-name');
+            t._clipName = t.template.querySelector('#clip-name');
             t._toggle = t.template.querySelector('.clip button');
             t._reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
             t._wantPlay = !t._reducedMotion.matches;
@@ -59,8 +63,8 @@
                     break;
                 case 'alt':
                     t._img.alt = value || '';
-                    t._link.setAttribute('aria-label', value ? `${value} (full size)` : 'Full-size screenshot');
-                    t._video.setAttribute('aria-label', value || 'Clip');
+                    t._linkName.innerText = value ? `${value} (full size)` : 'Full-size screenshot';
+                    t._clipName.innerText = value || 'Clip';
                     break;
                 case 'video':
                     t._link.hidden = !!value;
@@ -80,8 +84,9 @@
         },
         shadowTemplate: `
 <div class="wrap">
-<a class="shot" target="_blank" rel="noopener"><img loading="lazy" decoding="async"></a>
-<div class="shot clip" hidden><video muted loop playsinline preload="metadata"></video><button type="button" aria-label="Pause clip"></button></div>
+<a class="shot" target="_blank" rel="noopener" aria-labelledby="link-name"><img loading="lazy" decoding="async"></a>
+<span id="link-name" hidden></span>
+<div class="shot clip" hidden><video muted loop playsinline preload="metadata" aria-labelledby="clip-name"></video><span id="clip-name" hidden></span><button type="button" aria-label="Pause clip"></button></div>
 <div class="text"><slot></slot></div>
 </div>
 <style type="text/css">

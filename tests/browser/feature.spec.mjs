@@ -15,7 +15,7 @@ test.describe('app-feature', () => {
                 const clip = feature.locator('video');
                 await expect(clip).toBeVisible();
                 await expect(clip).toHaveAttribute('poster', src);
-                await expect(clip).toHaveAttribute('aria-label', /\w/);
+                await expect(clip).toHaveAccessibleName(/\w/);
                 await expect.poll(() => clip.evaluate(el => el.readyState)).toBeGreaterThan(0);
                 await expect(clip.locator('source')).toHaveCount(2);
                 await expect(feature.getByRole('link')).toHaveCount(0);
@@ -41,6 +41,25 @@ test.describe('app-feature', () => {
         await expect.poll(() => clip.evaluate(el => el.paused)).toBe(true);
         await feature.getByRole('button', { name: 'Play clip' }).click();
         await expect.poll(() => clip.evaluate(el => !el.paused)).toBe(true);
+    });
+
+    test('hovering a picture or clip shows no tooltip over it, while the clip\'s button keeps one', async ({ page }) => {
+        await openPage(page, '/');
+        const tooltip = page.locator('body > .tooltip');
+        const clipFeature = page.locator('app-feature[video]').first();
+        await clipFeature.scrollIntoViewIfNeeded();
+        // The button's tooltip opening shows the framework's tooltips are working on this page.
+        await clipFeature.getByRole('button', { name: /clip$/ }).hover();
+        await expect(tooltip).toHaveClass(/\bopen\b/);
+        await clipFeature.locator('video').hover({ position: { x: 20, y: 20 } });
+        await expect(tooltip).toHaveClass(/\bclosed\b/);
+        const stillFeature = page.locator('app-feature:not([video])').first();
+        await stillFeature.scrollIntoViewIfNeeded();
+        await expect(stillFeature.getByRole('link')).toHaveAccessibleName(/\(full size\)$/);
+        await clipFeature.getByRole('button', { name: /clip$/ }).hover();
+        await expect(tooltip).toHaveClass(/\bopen\b/);
+        await stillFeature.locator('img').hover();
+        await expect(tooltip).toHaveClass(/\bclosed\b/);
     });
 
     test('falls back to the WebM clip when the MP4 cannot play', async ({ page }) => {
